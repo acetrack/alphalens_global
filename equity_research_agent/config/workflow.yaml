@@ -1,0 +1,211 @@
+# Equity Research Agent Workflow Configuration
+# 에이전트 워크플로우 설정 파일
+
+version: "1.0"
+name: "Expert Equity Research Analyst Workflow"
+description: "국가별 이익 증감률 분석 및 리서치 보고서 생성 워크플로우"
+
+# 전역 설정
+global:
+  base_path: "./equity_research_agent"
+  output_path: "./equity_research_agent/output"
+  log_level: "INFO"
+  date_format: "YYYY-MM-DD"
+
+# 분석 대상 설정
+targets:
+  indices:
+    - code: "MXKR"
+      name: "MSCI Korea"
+      currency: "USD"
+      benchmark: "KOSPI"
+    - code: "MXTW"
+      name: "MSCI Taiwan"
+      currency: "USD"
+      benchmark: "TWSE"
+    - code: "MXCN"
+      name: "MSCI China"
+      currency: "USD"
+      benchmark: "CSI300"
+    - code: "MXIN"
+      name: "MSCI India"
+      currency: "USD"
+      benchmark: "NIFTY50"
+    - code: "MXJP"
+      name: "MSCI Japan"
+      currency: "USD"
+      benchmark: "TOPIX"
+    - code: "MXVN"
+      name: "MSCI Vietnam"
+      currency: "USD"
+      benchmark: "VN-Index"
+    - code: "MXPH"
+      name: "MSCI Philippines"
+      currency: "USD"
+      benchmark: "PSEi"
+
+  time_range:
+    historical:
+      start: 2021
+      end: 2024
+    forecast:
+      start: 2025
+      end: 2026
+
+# 에이전트 파이프라인 정의
+pipeline:
+  - agent: "01_data_identifier"
+    name: "Data Identifier"
+    description: "분석에 필요한 핵심 지표(KPIs) 정의"
+    instructions: "agents/01_data_identifier/INSTRUCTIONS.md"
+    inputs: []
+    outputs:
+      - "data_requirements.json"
+    timeout: 300  # seconds
+    retry: 2
+
+  - agent: "02_data_collector"
+    name: "Data Collector"
+    description: "다양한 소스에서 데이터 수집"
+    instructions: "agents/02_data_collector/INSTRUCTIONS.md"
+    inputs:
+      - "data_requirements.json"
+    outputs:
+      - "raw_data/"
+      - "collection_log.json"
+    timeout: 600
+    retry: 3
+    sub_tasks:
+      - source: "lseg_ibes"
+        priority: 1
+        guide: "agents/02_data_collector/sources/lseg_ibes.md"
+      - source: "msci_factsheets"
+        priority: 1
+        guide: "agents/02_data_collector/sources/msci_factsheets.md"
+      - source: "yardeni_research"
+        priority: 2
+        guide: "agents/02_data_collector/sources/yardeni_research.md"
+      - source: "brokerage_reports"
+        priority: 2
+        guide: "agents/02_data_collector/sources/brokerage_reports.md"
+
+  - agent: "03_data_validator"
+    name: "Data Validator"
+    description: "데이터 품질 검증 및 정제"
+    instructions: "agents/03_data_validator/INSTRUCTIONS.md"
+    inputs:
+      - "raw_data/"
+      - "data_requirements.json"
+    outputs:
+      - "validated_data/"
+      - "validation_report.json"
+      - "data_issues.json"
+    timeout: 300
+    retry: 1
+    validation_rules:
+      completeness_threshold: 0.8  # 80% 이상 데이터 확보 필요
+      consistency_tolerance:
+        forward_pe: 1.0
+        eps_growth: 5.0
+        roe: 2.0
+
+  - agent: "04_analyst"
+    name: "Analyst"
+    description: "파생 인사이트 도출 및 분석"
+    instructions: "agents/04_analyst/INSTRUCTIONS.md"
+    inputs:
+      - "validated_data/"
+    outputs:
+      - "analysis_results/"
+      - "insights.json"
+    timeout: 600
+    retry: 1
+    analysis_frameworks:
+      - name: "ai_semiconductor_cycle"
+        enabled: true
+        weight: 0.4
+      - name: "china_policy_analysis"
+        enabled: true
+        weight: 0.3
+      - name: "india_domestic_momentum"
+        enabled: true
+        weight: 0.3
+
+  - agent: "05_report_generator"
+    name: "Report Generator"
+    description: "최종 리서치 보고서 생성"
+    instructions: "agents/05_report_generator/INSTRUCTIONS.md"
+    inputs:
+      - "validated_data/"
+      - "insights.json"
+    outputs:
+      - "output/equity_research_report_*.md"
+      - "output/data_appendix.json"
+    timeout: 300
+    retry: 1
+    template: "templates/report_template.md"
+
+# 데이터 소스 설정
+data_sources:
+  primary:
+    - name: "LSEG I/B/E/S"
+      type: "earnings_consensus"
+      access: "public_report"
+      update_frequency: "weekly"
+      reliability: "high"
+
+    - name: "MSCI"
+      type: "index_fundamentals"
+      access: "public_factsheet"
+      update_frequency: "monthly"
+      reliability: "high"
+
+  secondary:
+    - name: "Yardeni Research"
+      type: "earnings_charts"
+      access: "public_report"
+      update_frequency: "weekly"
+      reliability: "medium"
+
+    - name: "Korean Brokerages"
+      type: "strategy_reports"
+      access: "public_report"
+      update_frequency: "monthly"
+      reliability: "medium"
+
+# 에러 처리 설정
+error_handling:
+  data_missing:
+    action: "fallback"
+    fallback_methods:
+      - "use_alternative_source"
+      - "interpolate"
+      - "reverse_calculate_eps"
+    notify: true
+
+  validation_failed:
+    action: "flag_and_continue"
+    threshold: 0.7  # 70% 이상 통과 시 계속
+    notify: true
+
+  agent_timeout:
+    action: "retry_with_backoff"
+    max_retries: 3
+    backoff_multiplier: 2
+
+# 알림 설정
+notifications:
+  on_completion:
+    enabled: true
+    channels: ["log"]
+  on_error:
+    enabled: true
+    channels: ["log"]
+
+# 출력 설정
+output_settings:
+  format: "markdown"
+  include_data_appendix: true
+  include_validation_report: false
+  latex_rendering: true
+  source_citations: true
