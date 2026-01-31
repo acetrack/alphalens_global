@@ -1,0 +1,402 @@
+# Stock Selection Agent Workflow Configuration
+# 종목 선정 에이전트 워크플로우 설정 파일
+
+version: "1.0"
+name: "Expert Stock Selection Workflow"
+description: "펀드매니저 수준의 종목 선정 및 밸류에이션 워크플로우"
+
+# 전역 설정
+global:
+  base_path: "./stock_selection_agent"
+  output_path: "./stock_selection_agent/output"
+  log_level: "INFO"
+  date_format: "YYYY-MM-DD"
+  currency: "KRW"
+  benchmark: "KOSPI"
+
+# 분석 대상 설정
+targets:
+  universe:
+    - code: "KOSPI"
+      name: "코스피 전체"
+      market: "KRX"
+      count: ~900
+    - code: "KOSDAQ150"
+      name: "코스닥 150"
+      market: "KRX"
+      count: 150
+    - code: "KOSPI200"
+      name: "코스피 200"
+      market: "KRX"
+      count: 200
+
+  # 스크리닝 필터 기본값
+  screening_defaults:
+    min_market_cap: 100000000000  # 1000억 이상
+    min_trading_value: 1000000000  # 일평균 10억 이상
+    min_listing_days: 365  # 상장 1년 이상
+    exclude_sectors:
+      - "스팩"
+      - "리츠"
+      - "관리종목"
+
+  time_range:
+    historical:
+      start: 2019
+      end: 2024
+    forecast:
+      start: 2025
+      end: 2027
+
+# 에이전트 파이프라인 정의
+pipeline:
+  # Phase 0: 오케스트레이션
+  - agent: "00_master_orchestrator"
+    name: "Master Orchestrator"
+    description: "전체 워크플로우 조율 및 에이전트 간 통합"
+    instructions: "agents/00_master_orchestrator/INSTRUCTIONS.md"
+    role: "orchestrator"
+    inputs: []
+    outputs:
+      - "final_portfolio.json"
+      - "execution_log.json"
+    timeout: 3600
+    retry: 1
+
+  # Phase 1: 스크리닝
+  - agent: "01_screening_agent"
+    name: "Screening Agent"
+    description: "멀티팩터 퀀트 스크리닝으로 투자 후보군 축소"
+    instructions: "agents/01_screening_agent/INSTRUCTIONS.md"
+    inputs: []
+    outputs:
+      - "screened_stocks.json"
+      - "screening_report.json"
+    timeout: 600
+    retry: 2
+    config:
+      target_count: 100  # 최종 후보군 수
+      factors:
+        value:
+          weight: 0.25
+          metrics: ["PER", "PBR", "EV_EBITDA", "PSR"]
+        quality:
+          weight: 0.25
+          metrics: ["ROE", "ROIC", "Debt_Ratio", "Interest_Coverage"]
+        momentum:
+          weight: 0.20
+          metrics: ["Price_Mom_12M", "Earnings_Revision", "Price_Mom_1M"]
+        growth:
+          weight: 0.20
+          metrics: ["Revenue_Growth", "EPS_Growth", "Operating_Profit_Growth"]
+        size:
+          weight: 0.10
+          metrics: ["Market_Cap", "Trading_Volume"]
+
+  # Phase 2: 재무 분석
+  - agent: "02_financial_agent"
+    name: "Financial Agent"
+    description: "재무제표 기반 기업 펀더멘털 분석"
+    instructions: "agents/02_financial_agent/INSTRUCTIONS.md"
+    inputs:
+      - "screened_stocks.json"
+    outputs:
+      - "financial_analysis/"
+      - "financial_scores.json"
+    timeout: 900
+    retry: 2
+    config:
+      analysis_depth: "comprehensive"  # basic, standard, comprehensive
+      periods: 5  # 최근 5개년
+      include_quarterly: true
+      ratio_categories:
+        - profitability
+        - liquidity
+        - leverage
+        - efficiency
+        - growth
+        - cash_flow
+
+  # Phase 3: 산업 분석
+  - agent: "03_industry_agent"
+    name: "Industry Agent"
+    description: "산업 구조 및 경쟁 환경 분석"
+    instructions: "agents/03_industry_agent/INSTRUCTIONS.md"
+    inputs:
+      - "screened_stocks.json"
+      - "financial_analysis/"
+    outputs:
+      - "industry_analysis/"
+      - "competitive_position.json"
+    timeout: 600
+    retry: 2
+    config:
+      frameworks:
+        - "porter_five_forces"
+        - "industry_lifecycle"
+        - "market_share_analysis"
+      peer_comparison: true
+      global_benchmark: true
+
+  # Phase 4: DCF 밸류에이션
+  - agent: "04_dcf_valuation_agent"
+    name: "DCF Valuation Agent"
+    description: "현금흐름할인모델 기반 내재가치 산출"
+    instructions: "agents/04_dcf_valuation_agent/INSTRUCTIONS.md"
+    inputs:
+      - "financial_analysis/"
+      - "industry_analysis/"
+    outputs:
+      - "dcf_valuations/"
+      - "dcf_summary.json"
+    timeout: 900
+    retry: 2
+    config:
+      models:
+        - "FCFF"  # Free Cash Flow to Firm
+        - "FCFE"  # Free Cash Flow to Equity
+      projection_years: 5
+      terminal_growth_rate: 0.02  # 2%
+      wacc_method: "CAPM"
+      sensitivity_analysis: true
+      monte_carlo_simulation: false
+
+  # Phase 5: 상대가치 평가
+  - agent: "05_relative_valuation_agent"
+    name: "Relative Valuation Agent"
+    description: "Peer 비교 기반 상대가치 평가"
+    instructions: "agents/05_relative_valuation_agent/INSTRUCTIONS.md"
+    inputs:
+      - "financial_analysis/"
+      - "industry_analysis/"
+    outputs:
+      - "relative_valuations/"
+      - "peer_comparison.json"
+    timeout: 600
+    retry: 2
+    config:
+      multiples:
+        - name: "PER"
+          weight: 0.35
+          adjustment: "earnings_quality"
+        - name: "PBR"
+          weight: 0.20
+          adjustment: "roe_based"
+        - name: "EV_EBITDA"
+          weight: 0.30
+          adjustment: "capital_intensity"
+        - name: "PSR"
+          weight: 0.15
+          adjustment: "margin_based"
+      peer_selection:
+        method: "gics_sector"
+        include_global: true
+        max_peers: 10
+      historical_band:
+        years: 5
+        percentiles: [10, 25, 50, 75, 90]
+
+  # Phase 6: 기술적 분석
+  - agent: "06_technical_agent"
+    name: "Technical Agent"
+    description: "가격 모멘텀 및 수급 분석"
+    instructions: "agents/06_technical_agent/INSTRUCTIONS.md"
+    inputs:
+      - "screened_stocks.json"
+    outputs:
+      - "technical_analysis/"
+      - "technical_signals.json"
+    timeout: 600
+    retry: 2
+    config:
+      indicators:
+        trend:
+          - "MA_20"
+          - "MA_60"
+          - "MA_120"
+          - "MACD"
+        momentum:
+          - "RSI_14"
+          - "Stochastic"
+          - "Williams_R"
+        volatility:
+          - "Bollinger_Bands"
+          - "ATR"
+        volume:
+          - "OBV"
+          - "Volume_MA"
+      supply_demand:
+        - "foreign_net_buy"
+        - "institutional_net_buy"
+        - "short_interest"
+      timeframes:
+        - "daily"
+        - "weekly"
+        - "monthly"
+
+  # Phase 7: 리스크 분석
+  - agent: "07_risk_agent"
+    name: "Risk Agent"
+    description: "투자 리스크 정량화 및 평가"
+    instructions: "agents/07_risk_agent/INSTRUCTIONS.md"
+    inputs:
+      - "financial_analysis/"
+      - "technical_analysis/"
+    outputs:
+      - "risk_analysis/"
+      - "risk_scores.json"
+    timeout: 600
+    retry: 2
+    config:
+      risk_metrics:
+        market:
+          - "beta"
+          - "var_95"
+          - "cvar_95"
+          - "max_drawdown"
+        credit:
+          - "altman_z"
+          - "debt_to_equity"
+          - "interest_coverage"
+        liquidity:
+          - "bid_ask_spread"
+          - "trading_volume"
+          - "turnover_ratio"
+        concentration:
+          - "top_shareholder"
+          - "foreign_ownership"
+      stress_scenarios:
+        - name: "market_crash"
+          description: "시장 급락 (-20%)"
+          factor: -0.20
+        - name: "interest_rate_shock"
+          description: "금리 급등 (+200bp)"
+          factor: 0.02
+        - name: "currency_depreciation"
+          description: "원화 약세 (-15%)"
+          factor: -0.15
+
+  # Phase 8: 센티먼트 분석
+  - agent: "08_sentiment_agent"
+    name: "Sentiment Agent"
+    description: "뉴스, 공시, 애널리스트 의견 분석"
+    instructions: "agents/08_sentiment_agent/INSTRUCTIONS.md"
+    inputs:
+      - "screened_stocks.json"
+    outputs:
+      - "sentiment_analysis/"
+      - "sentiment_scores.json"
+    timeout: 600
+    retry: 2
+    config:
+      sources:
+        news:
+          - "naver_news"
+          - "daum_news"
+          - "reuters_korea"
+        disclosure:
+          - "dart_filings"
+          - "krx_announcements"
+        analyst:
+          - "consensus_ratings"
+          - "target_price_changes"
+          - "earnings_revisions"
+      nlp_settings:
+        model: "korean_finance_bert"
+        sentiment_threshold: 0.6
+        lookback_days: 30
+
+# 최종 통합 설정
+integration:
+  scoring:
+    weights:
+      screening: 0.10
+      financial: 0.20
+      industry: 0.10
+      dcf_valuation: 0.20
+      relative_valuation: 0.15
+      technical: 0.10
+      risk: 0.10
+      sentiment: 0.05
+
+  portfolio_construction:
+    max_stocks: 30
+    min_conviction_score: 70  # 100점 만점
+    sector_max_weight: 0.30
+    single_stock_max_weight: 0.10
+    rebalancing_frequency: "monthly"
+
+# 데이터 소스 설정
+data_sources:
+  primary:
+    - name: "KRX"
+      type: "market_data"
+      access: "api"
+      update_frequency: "real_time"
+      reliability: "high"
+
+    - name: "DART"
+      type: "financial_statements"
+      access: "api"
+      update_frequency: "event_driven"
+      reliability: "high"
+
+    - name: "FnGuide"
+      type: "consensus"
+      access: "web_scraping"
+      update_frequency: "daily"
+      reliability: "high"
+
+  secondary:
+    - name: "Naver Finance"
+      type: "market_data"
+      access: "web_scraping"
+      update_frequency: "real_time"
+      reliability: "medium"
+
+    - name: "증권사 리포트"
+      type: "analyst_reports"
+      access: "manual"
+      update_frequency: "event_driven"
+      reliability: "medium"
+
+# 에러 처리 설정
+error_handling:
+  data_missing:
+    action: "fallback"
+    fallback_methods:
+      - "use_alternative_source"
+      - "use_industry_average"
+      - "exclude_from_analysis"
+    notify: true
+
+  valuation_failed:
+    action: "flag_and_continue"
+    threshold: 0.7
+    notify: true
+
+  agent_timeout:
+    action: "retry_with_backoff"
+    max_retries: 3
+    backoff_multiplier: 2
+
+# 알림 설정
+notifications:
+  on_completion:
+    enabled: true
+    channels: ["log"]
+  on_error:
+    enabled: true
+    channels: ["log"]
+  on_high_conviction:
+    enabled: true
+    channels: ["log"]
+    threshold: 85
+
+# 출력 설정
+output_settings:
+  format: "markdown"
+  include_raw_data: false
+  include_charts: true
+  include_sensitivity: true
+  source_citations: true
