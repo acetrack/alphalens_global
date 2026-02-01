@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "192080",
+    "stock_name": "더블유게임즈"
+  },
+  "investment_summary": {
+    "rating": "HOLD",
+    "target_price": 94000,
+    "current_price": 53500,
+    "upside_pct": 75.7,
+    "conviction_score": 60.1
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 83.0,
+      "weight": 0.2,
+      "weighted_score": 16.6,
+      "rationale": "저평가 (목표가: 94,000원, 상승여력: +75.7%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 50,
+      "weight": 0.15,
+      "weighted_score": 7.5,
+      "rationale": "등락률: 0.38%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 5.67,
+    "pbr": 0.94,
+    "target_price": 94000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "더블유게임즈(192080)에 대해 HOLD 의견을 제시합니다. Conviction Score 60.1/100으로 목표가 94,000원(상승여력 +75.7%)을 설정했습니다."
+}

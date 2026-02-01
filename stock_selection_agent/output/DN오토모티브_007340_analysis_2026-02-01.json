@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "007340",
+    "stock_name": "DN오토모티브"
+  },
+  "investment_summary": {
+    "rating": "HOLD",
+    "target_price": 60000,
+    "current_price": 25150,
+    "upside_pct": 138.6,
+    "conviction_score": 58.5
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 90.0,
+      "weight": 0.2,
+      "weighted_score": 18.0,
+      "rationale": "저평가 (목표가: 60,000원, 상승여력: +138.6%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 40,
+      "weight": 0.15,
+      "weighted_score": 6.0,
+      "rationale": "등락률: -1.95%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 50,
+      "weight": 0.15,
+      "weighted_score": 7.5,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 4.04,
+    "pbr": 0.75,
+    "target_price": 60000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "DN오토모티브(007340)에 대해 HOLD 의견을 제시합니다. Conviction Score 58.5/100으로 목표가 60,000원(상승여력 +138.6%)을 설정했습니다."
+}

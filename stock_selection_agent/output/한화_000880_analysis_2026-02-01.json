@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "000880",
+    "stock_name": "한화"
+  },
+  "investment_summary": {
+    "rating": "SELL",
+    "target_price": 119000,
+    "current_price": 114500,
+    "upside_pct": 3.9,
+    "conviction_score": 49.1
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 43.0,
+      "weight": 0.2,
+      "weighted_score": 8.6,
+      "rationale": "적정 (목표가: 119,000원, 상승여력: +3.9%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 30,
+      "weight": 0.15,
+      "weighted_score": 4.5,
+      "rationale": "등락률: -3.78%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 13.73,
+    "pbr": 0.95,
+    "target_price": 119000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "한화(000880)에 대해 SELL 의견을 제시합니다. Conviction Score 49.1/100으로 목표가 119,000원(상승여력 +3.9%)을 설정했습니다."
+}

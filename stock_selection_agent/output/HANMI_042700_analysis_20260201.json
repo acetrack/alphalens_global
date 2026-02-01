@@ -1,0 +1,197 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "data_as_of": "2026-01-31",
+    "current_fiscal_year": 2026,
+    "latest_reported_quarter": "2025Q4",
+    "forecast_period": "2026E ~ 2028E"
+  },
+  "company_info": {
+    "name": "한미반도체",
+    "code": "042700",
+    "market": "KOSPI",
+    "sector": "반도체 장비",
+    "market_cap_krw": 20110000000000,
+    "current_price": 211000,
+    "shares_outstanding": 95312200,
+    "foreign_ownership_pct": 7.9
+  },
+  "investment_summary": {
+    "rating": "HOLD",
+    "target_price": 220000,
+    "current_price": 211000,
+    "upside_pct": 4.3,
+    "conviction_score": 58.5,
+    "risk_level": "HIGH"
+  },
+  "agent_scores": {
+    "financial_agent": {
+      "score": 85,
+      "weight": 0.20,
+      "weighted_score": 17.0,
+      "summary": "2024년 매출 +251%, 영업이익 +638% 폭발적 성장. 영업이익률 45.7%로 업종 최상위권"
+    },
+    "industry_agent": {
+      "score": 75,
+      "weight": 0.15,
+      "weighted_score": 11.3,
+      "summary": "HBM 슈퍼사이클 수혜, TC본더 글로벌 1위(71%). 단 하이브리드 본더 기술 경쟁에서 열위"
+    },
+    "dcf_valuation_agent": {
+      "score": 50,
+      "weight": 0.15,
+      "weighted_score": 7.5,
+      "summary": "DCF 적정가치 180,000~250,000원. 현재가 대비 제한적 업사이드"
+    },
+    "relative_valuation_agent": {
+      "score": 45,
+      "weight": 0.15,
+      "weighted_score": 6.8,
+      "summary": "Forward PER 51배로 글로벌 피어(37배) 대비 고평가. 밸류에이션 부담 존재"
+    },
+    "technical_agent": {
+      "score": 70,
+      "weight": 0.10,
+      "weighted_score": 7.0,
+      "summary": "강한 상승 추세, 52주 신고가 경신. 단기 급등 후 변동성 확대 주의"
+    },
+    "risk_agent": {
+      "score": 55,
+      "weight": 0.15,
+      "weighted_score": 8.3,
+      "summary": "SK하이닉스 발주 급감, 경쟁사 부상, 차세대 기술 지연 등 다중 리스크"
+    },
+    "sentiment_agent": {
+      "score": 55,
+      "weight": 0.10,
+      "weighted_score": 5.5,
+      "summary": "국내 증권사 긍정적, 외국계(JP모건, 맥쿼리) 부정적. 의견 혼재"
+    }
+  },
+  "financials": {
+    "annual": {
+      "2023": {
+        "revenue_krw": 159100000000,
+        "operating_profit_krw": 34600000000,
+        "op_margin_pct": 21.7
+      },
+      "2024": {
+        "revenue_krw": 559000000000,
+        "operating_profit_krw": 255400000000,
+        "net_income_krw": 153000000000,
+        "op_margin_pct": 45.7,
+        "roe_pct": 27.4
+      },
+      "2025E": {
+        "revenue_krw": 833200000000,
+        "operating_profit_krw": 422700000000,
+        "op_margin_pct": 50.7
+      },
+      "2026E": {
+        "revenue_krw_low": 1500000000000,
+        "revenue_krw_high": 2000000000000,
+        "note": "회사 목표 2조원"
+      }
+    },
+    "growth_rates": {
+      "revenue_2024_yoy_pct": 251,
+      "op_profit_2024_yoy_pct": 638,
+      "revenue_2025_ytd_yoy_pct": 20.6
+    }
+  },
+  "valuation_metrics": {
+    "trailing_per": 73.2,
+    "forward_per_2026e": 51.0,
+    "pbr": 26.6,
+    "sector_avg_per": 21.93,
+    "global_peer_per": 37.0
+  },
+  "market_position": {
+    "tc_bonder_market_share_pct": 71.2,
+    "rank": 1,
+    "competitors": [
+      {"name": "세메스", "share_pct": 13.1},
+      {"name": "ASMPT", "share_pct": 5.6},
+      {"name": "야마하", "share_pct": 5.6},
+      {"name": "한화세미텍", "share_pct": 3.2}
+    ]
+  },
+  "risk_factors": [
+    {
+      "category": "발주 감소",
+      "severity": "HIGH",
+      "description": "SK하이닉스 TC본더 발주 100대→50대 급감"
+    },
+    {
+      "category": "경쟁 심화",
+      "severity": "HIGH",
+      "description": "한화세미텍 부상, 세메스 삼성전자 내부 공급 가능성"
+    },
+    {
+      "category": "기술 지연",
+      "severity": "MEDIUM-HIGH",
+      "description": "하이브리드 본더 2027년 말 출시 (경쟁사 대비 지연)"
+    },
+    {
+      "category": "밸류에이션",
+      "severity": "HIGH",
+      "description": "PER 51배로 글로벌 피어(37배) 대비 고평가"
+    },
+    {
+      "category": "고객 집중",
+      "severity": "MEDIUM",
+      "description": "SK하이닉스 의존도 40%, 해외 비중 확대 중"
+    }
+  ],
+  "catalysts": {
+    "positive": [
+      "2026년 2월 HBM4 양산 시작",
+      "HBM4 양산 시 TC본더 ASP 30~40% 상승",
+      "북미 고객사(엔비디아, 마이크론) 확대",
+      "2026년 말 와이드 TC본더 출시"
+    ],
+    "negative": [
+      "SK하이닉스 공급망 이원화",
+      "JP모건, 맥쿼리 투자의견 하향",
+      "하이브리드 본더 기술 경쟁 열위"
+    ]
+  },
+  "analyst_recommendations": [
+    {"firm": "현대차증권", "rating": "매수", "target_price": 260000, "date": "2026-01"},
+    {"firm": "LS증권", "rating": "매수", "target_price": 150000, "date": "2025-02"},
+    {"firm": "KB증권", "rating": "매수", "target_price": 150000, "date": "2025-02"},
+    {"firm": "JP모건", "rating": "비중축소", "target_price": null, "date": "2026-01"},
+    {"firm": "맥쿼리", "rating": "하향", "target_price": null, "date": "2026-01"}
+  ],
+  "target_price_breakdown": {
+    "relative_valuation": {"value": 200000, "weight": 0.50},
+    "dcf_base_case": {"value": 220000, "weight": 0.30},
+    "consensus_avg": {"value": 250000, "weight": 0.20},
+    "weighted_target": 220000
+  },
+  "investment_strategy": {
+    "short_term_1_3m": {
+      "action": "관망/분할매도",
+      "rationale": "단기 급등 후 차익실현 압력, 밸류에이션 부담"
+    },
+    "medium_term_6_12m": {
+      "action": "조정 시 분할매수",
+      "buy_range": "150,000~170,000원",
+      "rationale": "2026년 HBM4 양산으로 실적 개선 기대"
+    },
+    "long_term_12m_plus": {
+      "action": "하이브리드 본더 기술 진척 모니터링",
+      "key_watchpoints": [
+        "하이브리드 본더 개발 진행",
+        "SK하이닉스/마이크론 수주 동향",
+        "차세대 HBM 시장 점유율"
+      ]
+    }
+  },
+  "monitoring_indicators": [
+    {"indicator": "TC본더 점유율", "current": "71%", "bull_case": "75%+", "bear_case": "<60%"},
+    {"indicator": "SK하이닉스 발주", "current": "50대", "bull_case": "100대+", "bear_case": "<30대"},
+    {"indicator": "2026년 매출", "current": "목표 2조", "bull_case": "2조+ 달성", "bear_case": "<1.5조"},
+    {"indicator": "하이브리드 본더", "current": "2027말 출시", "bull_case": "조기 출시", "bear_case": "추가 지연"}
+  ]
+}

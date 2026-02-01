@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "138040",
+    "stock_name": "메리츠금융지주"
+  },
+  "investment_summary": {
+    "rating": "HOLD",
+    "target_price": 113000,
+    "current_price": 116600,
+    "upside_pct": -3.1,
+    "conviction_score": 56.5
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 50.0,
+      "weight": 0.2,
+      "weighted_score": 10.0,
+      "rationale": "적정 (목표가: 113,000원, 상승여력: -3.1%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 70,
+      "weight": 0.15,
+      "weighted_score": 10.5,
+      "rationale": "등락률: 4.86%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 9.51,
+    "pbr": 2.08,
+    "target_price": 113000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "메리츠금융지주(138040)에 대해 HOLD 의견을 제시합니다. Conviction Score 56.5/100으로 목표가 113,000원(상승여력 -3.1%)을 설정했습니다."
+}

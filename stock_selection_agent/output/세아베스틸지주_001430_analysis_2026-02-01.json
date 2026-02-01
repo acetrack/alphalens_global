@@ -1,0 +1,70 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "001430",
+    "stock_name": "세아베스틸지주"
+  },
+  "investment_summary": {
+    "rating": "SELL",
+    "target_price": 32000,
+    "current_price": 72800,
+    "upside_pct": -56.0,
+    "conviction_score": 43.9
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 17.0,
+      "weight": 0.2,
+      "weighted_score": 3.4000000000000004,
+      "rationale": "고평가 (목표가: 32,000원, 상승여력: -56.0%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 50,
+      "weight": 0.15,
+      "weighted_score": 7.5,
+      "rationale": "등락률: -0.41%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 40,
+      "weight": 0.15,
+      "weighted_score": 6.0,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 129.08,
+    "pbr": 1.35,
+    "target_price": 32000
+  },
+  "risk_assessment": {
+    "level": "MEDIUM",
+    "factors": [
+      "고평가 위험 (PER > 30)"
+    ]
+  },
+  "summary": "세아베스틸지주(001430)에 대해 SELL 의견을 제시합니다. Conviction Score 43.9/100으로 목표가 32,000원(상승여력 -56.0%)을 설정했습니다."
+}

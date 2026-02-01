@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "026960",
+    "stock_name": "동서"
+  },
+  "investment_summary": {
+    "rating": "SELL",
+    "target_price": 20000,
+    "current_price": 26000,
+    "upside_pct": -23.1,
+    "conviction_score": 45.4
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 17.0,
+      "weight": 0.2,
+      "weighted_score": 3.4000000000000004,
+      "rationale": "고평가 (목표가: 20,000원, 상승여력: -23.1%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 40,
+      "weight": 0.15,
+      "weighted_score": 6.0,
+      "rationale": "등락률: -1.52%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 16.31,
+    "pbr": 1.51,
+    "target_price": 20000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "동서(026960)에 대해 SELL 의견을 제시합니다. Conviction Score 45.4/100으로 목표가 20,000원(상승여력 -23.1%)을 설정했습니다."
+}

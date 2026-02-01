@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "000270",
+    "stock_name": "기아"
+  },
+  "investment_summary": {
+    "rating": "HOLD",
+    "target_price": 203000,
+    "current_price": 152600,
+    "upside_pct": 33.0,
+    "conviction_score": 57.0
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 75.0,
+      "weight": 0.2,
+      "weighted_score": 15.0,
+      "rationale": "저평가 (목표가: 203,000원, 상승여력: +33.0%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 40,
+      "weight": 0.15,
+      "weighted_score": 6.0,
+      "rationale": "등락률: -1.48%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 6.13,
+    "pbr": 1.08,
+    "target_price": 203000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "기아(000270)에 대해 HOLD 의견을 제시합니다. Conviction Score 57.0/100으로 목표가 203,000원(상승여력 +33.0%)을 설정했습니다."
+}

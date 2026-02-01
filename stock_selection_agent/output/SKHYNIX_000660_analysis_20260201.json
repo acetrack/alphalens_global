@@ -1,0 +1,249 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "data_as_of": "2026-01-31",
+    "current_fiscal_year": 2026,
+    "latest_reported_quarter": "2025Q4",
+    "forecast_period": "2026E ~ 2028E"
+  },
+  "company_info": {
+    "name": "SK하이닉스",
+    "name_en": "SK Hynix Inc.",
+    "code": "000660",
+    "market": "KOSPI",
+    "sector": "반도체",
+    "market_cap_krw": 110000000000000,
+    "current_price": 756000,
+    "price_date": "2026-01-19",
+    "52week_high": 788000,
+    "52week_low": 162700
+  },
+  "investment_summary": {
+    "rating": "BUY",
+    "target_price": 900000,
+    "current_price": 756000,
+    "upside_pct": 19.0,
+    "conviction_score": 82.5,
+    "risk_level": "MEDIUM"
+  },
+  "agent_scores": {
+    "financial_agent": {
+      "score": 95,
+      "weight": 0.20,
+      "weighted_score": 19.0,
+      "summary": "2025년 매출 97.1조, 영업이익 47.2조 사상 최대. 4Q 영업이익률 58% 기록"
+    },
+    "industry_agent": {
+      "score": 90,
+      "weight": 0.15,
+      "weighted_score": 13.5,
+      "summary": "HBM 글로벌 1위(62%), 2026년 메모리 슈퍼사이클 본격화"
+    },
+    "dcf_valuation_agent": {
+      "score": 85,
+      "weight": 0.15,
+      "weighted_score": 12.8,
+      "summary": "DCF 적정가치 850,000~1,100,000원. 현재가 대비 업사이드 존재"
+    },
+    "relative_valuation_agent": {
+      "score": 85,
+      "weight": 0.15,
+      "weighted_score": 12.8,
+      "summary": "Forward PER 6~8배로 삼성전자(12~15배) 대비 저평가"
+    },
+    "technical_agent": {
+      "score": 80,
+      "weight": 0.10,
+      "weighted_score": 8.0,
+      "summary": "1년간 280% 상승, 외국인 9일 연속 순매수. 강한 상승 추세"
+    },
+    "risk_agent": {
+      "score": 70,
+      "weight": 0.15,
+      "weighted_score": 10.5,
+      "summary": "미국 관세 위협, 경쟁 심화 리스크 있으나 관리 가능 수준"
+    },
+    "sentiment_agent": {
+      "score": 90,
+      "weight": 0.10,
+      "weighted_score": 9.0,
+      "summary": "35명 매수 vs 1명 매도. '강력 매수' 컨센서스"
+    }
+  },
+  "financials": {
+    "annual": {
+      "2023": {
+        "revenue_krw": 32800000000000,
+        "operating_profit_krw": -7700000000000,
+        "op_margin_pct": -23.5
+      },
+      "2024": {
+        "revenue_krw": 66200000000000,
+        "operating_profit_krw": 23500000000000,
+        "op_margin_pct": 35.5
+      },
+      "2025": {
+        "revenue_krw": 97146700000000,
+        "operating_profit_krw": 47206300000000,
+        "net_income_krw": 42947900000000,
+        "op_margin_pct": 49,
+        "note": "사상 최대 실적"
+      },
+      "2026E": {
+        "revenue_krw_low": 166000000000000,
+        "revenue_krw_high": 190000000000000,
+        "operating_profit_krw_low": 100000000000000,
+        "operating_profit_krw_high": 124000000000000,
+        "op_margin_pct": 60
+      }
+    },
+    "quarterly_2025Q4": {
+      "revenue_krw": 32826700000000,
+      "operating_profit_krw": 19169600000000,
+      "op_margin_pct": 58,
+      "qoq_revenue_growth_pct": 34,
+      "qoq_op_growth_pct": 68,
+      "yoy_revenue_growth_pct": 66,
+      "yoy_op_growth_pct": 137,
+      "note": "분기 기준 사상 최대"
+    }
+  },
+  "valuation_metrics": {
+    "trailing_per": 13.3,
+    "forward_per_2026e_low": 6,
+    "forward_per_2026e_high": 8,
+    "pbr": 3.3,
+    "roe_pct": 31,
+    "samsung_comparison": {
+      "trailing_per": 24.9,
+      "roe_pct": 10
+    }
+  },
+  "market_position": {
+    "hbm_market_share_pct": 62,
+    "hbm_rank": 1,
+    "nvidia_supply_share_pct": 70,
+    "competitors": [
+      {"name": "마이크론", "hbm_share_pct": 21},
+      {"name": "삼성전자", "hbm_share_pct": 17}
+    ],
+    "hbm4_nvidia_contract": "전체 물량의 60% 계약 완료"
+  },
+  "technology_roadmap": {
+    "hbm3e": "2026년 주력 (전체 출하량의 2/3)",
+    "hbm4_12stack": "2026 1Q 퀄테스트 완료, 2Q 본격 공급",
+    "hbm4_16stack": "CES 2026 공개, 48GB, 11.7Gbps"
+  },
+  "risk_factors": [
+    {
+      "category": "미국 관세",
+      "severity": "MEDIUM-HIGH",
+      "description": "미국 내 생산시설 없는 기업에 최대 100% 관세 위협"
+    },
+    {
+      "category": "HBM 공급 과잉",
+      "severity": "MEDIUM",
+      "description": "골드만삭스: 2026년 HBM 가격 10% 하락 가능성"
+    },
+    {
+      "category": "경쟁 심화",
+      "severity": "MEDIUM",
+      "description": "삼성전자 HBM4 점유율 30% 목표, 마이크론 200억$ 투자"
+    },
+    {
+      "category": "지정학적 리스크",
+      "severity": "MEDIUM",
+      "description": "미중 반도체 갈등, 중국 팹 장비 수입 허가 연간 갱신"
+    }
+  ],
+  "catalysts": {
+    "positive": [
+      "2026년 1분기 HBM4 엔비디아 퀄테스트 통과",
+      "2026년 영업이익 100조원 달성",
+      "범용 D램 ASP 25~40% 상승",
+      "자사주 12.2조원 소각",
+      "메모리 슈퍼사이클 본격화"
+    ],
+    "negative": [
+      "미국 100% 관세 부과 시",
+      "HBM 공급 과잉으로 가격 하락",
+      "삼성전자/마이크론 점유율 급상승"
+    ]
+  },
+  "analyst_recommendations": {
+    "buy_count": 35,
+    "sell_count": 1,
+    "consensus": "Strong Buy",
+    "average_target": 782532,
+    "high_target": 1120000,
+    "low_target": 255245,
+    "notable_targets": [
+      {"firm": "SK증권", "target_price": 1000000},
+      {"firm": "NH투자증권/노무라", "target_price": 880000},
+      {"firm": "대신증권", "target_price": 840000},
+      {"firm": "모건스탠리", "target_price": 840000},
+      {"firm": "유안타증권", "target_price": 570000}
+    ]
+  },
+  "target_price_breakdown": {
+    "forward_per_8x": {"value": 880000, "weight": 0.40},
+    "dcf_base_case": {"value": 950000, "weight": 0.30},
+    "consensus_avg": {"value": 850000, "weight": 0.30},
+    "weighted_target": 900000
+  },
+  "investment_strategy": {
+    "short_term_1_3m": {
+      "action": "보유 유지/분할 매수",
+      "buy_range": "700,000~750,000원",
+      "rationale": "2025년 4Q 실적 호조, HBM4 퀄테스트 기대"
+    },
+    "medium_term_6_12m": {
+      "action": "적극 매수",
+      "target": "900,000원",
+      "rationale": "2026년 영업이익 100조원, D램 가격 상승"
+    },
+    "long_term_12m_plus": {
+      "action": "100만닉스 도달 시 일부 차익실현",
+      "key_watchpoints": [
+        "HBM4/HBM4E 점유율 유지",
+        "미국 관세 정책 확정",
+        "삼성/마이크론 경쟁력 변화"
+      ]
+    }
+  },
+  "monitoring_indicators": [
+    {"indicator": "HBM 점유율", "current": "62%", "bull_case": "65%+", "bear_case": "<50%"},
+    {"indicator": "엔비디아 점유율", "current": "70%", "bull_case": "70% 유지", "bear_case": "<50%"},
+    {"indicator": "2026년 영업이익", "current": "목표 100조", "bull_case": "110조+", "bear_case": "<80조"},
+    {"indicator": "범용 D램 ASP", "current": "$0.52/Gb", "bull_case": "$0.72+", "bear_case": "<$0.50"},
+    {"indicator": "미국 관세", "current": "위협", "bull_case": "면제/협상", "bear_case": "100% 부과"}
+  ],
+  "shareholder_return": {
+    "dividend_2025": {
+      "per_share_krw": 3000,
+      "total_krw": 2100000000000
+    },
+    "buyback": {
+      "shares": 15300000,
+      "value_krw": 12200000000000,
+      "ownership_pct": 2.1,
+      "action": "전량 소각"
+    }
+  },
+  "capex_plan": {
+    "2025": 29000000000000,
+    "2026E": 35000000000000,
+    "major_projects": [
+      {
+        "name": "청주 M15X 팹",
+        "investment": 20000000000000,
+        "purpose": "HBM3E/HBM4 생산"
+      },
+      {
+        "name": "용인 반도체 클러스터",
+        "investment": 600000000000000,
+        "note": "기존 120조 → 600조 확대"
+      }
+    ]
+  }
+}

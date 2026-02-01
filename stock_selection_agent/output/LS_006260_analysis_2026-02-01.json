@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-01",
+    "stock_code": "006260",
+    "stock_name": "LS"
+  },
+  "investment_summary": {
+    "rating": "SELL",
+    "target_price": 146000,
+    "current_price": 229000,
+    "upside_pct": -36.2,
+    "conviction_score": 43.9
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 50,
+      "weight": 0.25,
+      "weighted_score": 12.5,
+      "rationale": "재무 데이터 없음 - 기본값 적용"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 17.0,
+      "weight": 0.2,
+      "weighted_score": 3.4000000000000004,
+      "rationale": "고평가 (목표가: 146,000원, 상승여력: -36.2%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 30,
+      "weight": 0.15,
+      "weighted_score": 4.5,
+      "rationale": "등락률: -3.17%"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "업종 분석 - 기본값 적용"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 60,
+      "weight": 0.15,
+      "weighted_score": 9.0,
+      "rationale": "위험 평가 기반"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 55,
+      "weight": 0.1,
+      "weighted_score": 5.5,
+      "rationale": "심리 분석 - 기본값 적용"
+    }
+  ],
+  "valuation": {
+    "per": 26.39,
+    "pbr": 1.36,
+    "target_price": 146000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "LS(006260)에 대해 SELL 의견을 제시합니다. Conviction Score 43.9/100으로 목표가 146,000원(상승여력 -36.2%)을 설정했습니다."
+}

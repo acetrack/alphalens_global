@@ -25,6 +25,73 @@ global:
       3. 실적 전망 시 현재 연도 기준으로 과거/미래 구분
       4. 분석 리포트에 분석 기준일 명시
 
+  # 데이터 신선도 검증 설정 (필수)
+  data_freshness:
+    required: true
+    max_staleness_days: 5  # 데이터가 분석일 기준 5일 이상 오래되면 경고
+
+    validation_rules:
+      # 주가 데이터
+      price_data:
+        max_age_days: 3
+        warning_threshold: 1
+        action_on_stale: "warn_and_note"  # warn_and_note, warn_and_stop, ignore
+
+      # 재무 데이터 (분기별 발표이므로 더 관대)
+      financial_data:
+        max_age_days: 45
+        warning_threshold: 30
+        action_on_stale: "warn_and_note"
+
+      # 애널리스트 목표주가
+      analyst_data:
+        max_age_days: 30
+        warning_threshold: 14
+        action_on_stale: "warn_and_note"
+
+    report_requirements:
+      # 리포트에 반드시 포함해야 할 날짜 정보
+      mandatory_fields:
+        - analysis_date        # 분석 기준일 (오늘 날짜)
+        - price_data_date      # 주가 데이터 기준일
+        - financial_data_date  # 재무 데이터 기준일
+        - data_freshness_note  # 데이터 신선도 참고사항
+
+      # 데이터 기준일 표기 형식
+      date_display_format: |
+        ## 데이터 기준일 안내
+        | 데이터 유형 | 기준일 | 신선도 |
+        |------------|--------|--------|
+        | 분석 기준일 | {analysis_date} | - |
+        | 주가 데이터 | {price_date} | {price_freshness} |
+        | 재무 데이터 | {financial_date} | {financial_freshness} |
+        | 애널리스트 | {analyst_date} | {analyst_freshness} |
+
+      # 신선도 표시 규칙
+      freshness_labels:
+        fresh: "최신"           # 0-1일
+        recent: "최근"          # 2-3일
+        acceptable: "허용범위"   # 4-7일
+        stale: "⚠️ 오래됨"      # 7일+
+        very_stale: "⚠️⚠️ 매우 오래됨"  # 14일+
+
+    instructions: |
+      데이터 신선도 검증 절차:
+      1. 검색된 모든 데이터의 날짜를 확인
+      2. 분석 기준일과 데이터 기준일 간의 차이 계산
+      3. 차이가 max_age_days를 초과하면 경고 표시
+      4. 리포트에 데이터 기준일과 신선도 상태 명시
+
+      예시:
+      - 분석일: 2026-02-01
+      - 주가 데이터: 2026-01-19 → "⚠️ 오래됨 (13일 전)"
+      - 재무 데이터: 2025-12-31 → "최신" (분기 실적 기준)
+
+      주의사항:
+      - 주가는 가능한 가장 최근 거래일 데이터 사용
+      - 검색 시 "실시간", "오늘", "최근" 키워드 활용
+      - 오래된 데이터 사용 시 반드시 리포트에 명시
+
 # 분석 대상 설정
 targets:
   universe:

@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(python -c:*)",
+      "Bash(python3:*)",
+      "Bash(source ~/.zshrc)",
+      "Bash(python run_analysis.py:*)"
     ]
   }
 }
