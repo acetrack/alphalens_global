@@ -18,6 +18,75 @@
 
 ---
 
+## ⚠️ 필수 선행 단계: 현재 날짜 확인
+
+### 분석 시작 전 반드시 현재 날짜를 확인해야 합니다.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ⚠️ DATE VALIDATION (필수)                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. 시스템 날짜 확인 또는 사용자에게 현재 날짜 질문                    │
+│  2. 현재 연도/분기 기준으로 분석 기간 설정                            │
+│  3. 데이터 검색 시 올바른 연도 키워드 사용                            │
+│  4. 모든 리포트에 분석 기준일 명시                                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 날짜 확인 절차
+
+```python
+def validate_analysis_date():
+    """
+    분석 시작 전 필수 실행
+    """
+    # Step 1: 현재 날짜 확인
+    current_date = get_current_date()  # 시스템 또는 사용자 확인
+
+    # Step 2: 분석 기간 동적 설정
+    current_year = current_date.year
+    current_quarter = (current_date.month - 1) // 3 + 1
+
+    analysis_context = {
+        "analysis_date": current_date.strftime("%Y-%m-%d"),
+        "current_year": current_year,
+        "current_quarter": f"{current_year}Q{current_quarter}",
+        "historical_start": current_year - 5,
+        "historical_end": current_year - 1,
+        "forecast_start": current_year,
+        "forecast_end": current_year + 2,
+        "latest_annual_report": current_year - 1,  # 가장 최근 연간 실적
+        "latest_quarterly": f"{current_year}Q{current_quarter - 1}" if current_quarter > 1 else f"{current_year - 1}Q4"
+    }
+
+    return analysis_context
+```
+
+### 날짜 기반 데이터 검색 가이드
+
+| 현재 날짜 | 검색 키워드 예시 |
+|-----------|-----------------|
+| 2026년 2월 | "2026년 실적 전망", "2025년 4분기 실적" |
+| 2025년 8월 | "2025년 2분기 실적", "2025년 하반기 전망" |
+| 2024년 3월 | "2024년 1분기 전망", "2023년 연간 실적" |
+
+### 리포트 날짜 표기
+
+모든 분석 리포트에 다음 정보를 포함해야 합니다:
+
+```yaml
+report_header:
+  analysis_date: "2026-02-01"  # 분석 기준일
+  data_as_of: "2026-01-31"     # 데이터 기준일
+  current_fiscal_year: 2026
+  latest_reported_quarter: "2025Q4"
+  forecast_period: "2026E ~ 2028E"
+```
+
+---
+
 ## 오케스트레이션 아키텍처
 
 ```

@@ -18,6 +18,33 @@
 
 ---
 
+## ⚠️ 필수: 현재 날짜 확인
+
+**분석 시작 전 반드시 현재 날짜를 확인하세요.**
+
+```yaml
+date_validation:
+  required: true
+  dcf_context:
+    # 현재가 2026년 2월이라면:
+    base_year: 2025              # DCF 시작 기준년 (최근 실적)
+    projection_start: 2026       # 예측 시작년
+    projection_end: 2030         # 예측 종료년 (5년)
+    terminal_year: 2031          # 터미널 밸류 기준년
+
+  macro_data:
+    risk_free_rate: "한국 국고채 10년물 {current_year} 금리"
+    market_premium: "코스피 시장위험프리미엄 {current_year}"
+
+  search_keywords:
+    - "{company} 실적 전망 {current_year} {current_year+1}"
+    - "{company} 컨센서스 EPS {current_year}"
+    - "국고채 10년 금리 {current_year}"
+    - "{company} WACC 할인율"
+```
+
+---
+
 ## DCF 밸류에이션 기본 개념
 
 ### 기업가치 공식

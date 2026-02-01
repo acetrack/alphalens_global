@@ -18,6 +18,29 @@
 
 ---
 
+## ⚠️ 필수: 현재 날짜 확인
+
+**분석 시작 전 반드시 현재 날짜를 확인하세요.**
+
+```yaml
+date_validation:
+  required: true
+  risk_context:
+    # 현재가 2026년 2월이라면:
+    beta_calculation_period: "2023-02 ~ 2026-01"  # 최근 3년
+    var_calculation_period: "2025-02 ~ 2026-01"   # 최근 1년
+    mdd_calculation_period: "2023-02 ~ 2026-01"   # 최근 3년
+    credit_data_year: 2025                        # 최근 재무제표
+
+  search_keywords:
+    - "{company} 베타 변동성 {current_year}"
+    - "{company} 부채비율 신용등급 {current_year}"
+    - "{company} 최대낙폭 MDD"
+    - "한국 시장위험프리미엄 {current_year}"
+```
+
+---
+
 ## 리스크 분석 체계
 
 ```

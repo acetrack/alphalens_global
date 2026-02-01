@@ -17,6 +17,31 @@
 
 ---
 
+## ⚠️ 필수: 현재 날짜 확인
+
+**분석 시작 전 반드시 현재 날짜를 확인하세요.**
+
+```yaml
+date_validation:
+  required: true
+  technical_context:
+    # 현재가 2026년 2월 1일이라면:
+    analysis_date: "2026-02-01"
+    price_data_end: "2026-01-31"   # 가장 최근 거래일
+    lookback_periods:
+      daily: 120    # 최근 120거래일
+      weekly: 52    # 최근 52주
+      monthly: 36   # 최근 36개월
+
+  search_keywords:
+    - "{company} 주가 차트 {current_year}년 {current_month}월"
+    - "{company} 외국인 기관 매매 동향 {current_year}"
+    - "{company} 기술적 분석 {current_year}"
+    - "{company} 이동평균선 {current_date}"
+```
+
+---
+
 ## 기술적 분석 체계
 
 ```

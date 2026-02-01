@@ -17,6 +17,28 @@
 
 ---
 
+## ⚠️ 필수: 현재 날짜 확인
+
+**분석 시작 전 반드시 현재 날짜를 확인하세요.**
+
+```yaml
+date_validation:
+  required: true
+  industry_data_context:
+    # 현재가 2026년 2월이라면:
+    market_share_year: 2025     # 시장점유율 기준년
+    industry_report_year: 2026  # 산업 전망 리포트
+    competitor_data: 2025       # 경쟁사 실적 데이터
+
+  search_keywords:
+    - "{sector} 산업 전망 {current_year}"
+    - "{sector} 시장점유율 {current_year-1}"
+    - "{company} 경쟁사 비교 {current_year}"
+    - "{sector} 산업 동향 {current_year}"
+```
+
+---
+
 ## 1단계: 산업 분류 및 구조 파악
 
 ### GICS 섹터 분류

@@ -17,6 +17,29 @@
 
 ---
 
+## ⚠️ 필수: 현재 날짜 확인
+
+**분석 시작 전 반드시 현재 날짜를 확인하세요.**
+
+```yaml
+date_validation:
+  required: true
+  financial_data_context:
+    # 현재가 2026년 2월이라면:
+    latest_annual: 2025        # 가장 최근 연간 재무제표
+    latest_quarterly: "2025Q4" # 가장 최근 분기 실적 (또는 2025Q3)
+    analysis_periods: [2021, 2022, 2023, 2024, 2025]  # 최근 5개년
+    forward_estimates: [2026, 2027, 2028]  # 향후 추정치
+
+  search_keywords:
+    - "{current_year-1}년 연간 재무제표"
+    - "{current_year-1}년 4분기 실적"
+    - "{current_year}년 실적 전망"
+    - "ROE ROA 영업이익률 {current_year}"
+```
+
+---
+
 ## 재무제표 분석 체계
 
 ### 분석 대상 재무제표

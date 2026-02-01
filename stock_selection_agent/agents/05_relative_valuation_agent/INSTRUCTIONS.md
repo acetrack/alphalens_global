@@ -18,6 +18,28 @@ Peer 그룹 비교를 통한 상대가치 평가(Relative Valuation)를 수행�
 
 ---
 
+## ⚠️ 필수: 현재 날짜 확인
+
+**분석 시작 전 반드시 현재 날짜를 확인하세요.**
+
+```yaml
+date_validation:
+  required: true
+  relative_valuation_context:
+    # 현재가 2026년 2월이라면:
+    trailing_multiples: "2025년 실적 기준"     # Trailing PER/PBR
+    forward_multiples: "2026년 추정 기준"      # Forward PER/PBR
+    historical_band: [2021, 2022, 2023, 2024, 2025]  # 5년 밸류밴드
+
+  search_keywords:
+    - "{company} PER PBR {current_year}"
+    - "{company} 밸류에이션 {current_year}"
+    - "{peer} 멀티플 비교 {current_year}"
+    - "{company} 12개월 선행 PER"
+```
+
+---
+
 ## 상대가치 평가 기본 개념
 
 ### 멀티플 기반 밸류에이션

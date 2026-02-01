@@ -14,6 +14,17 @@ global:
   currency: "KRW"
   benchmark: "KOSPI"
 
+  # 날짜 확인 설정 (필수)
+  date_validation:
+    required: true
+    check_before_analysis: true
+    instructions: |
+      모든 분석 시작 전 반드시 현재 날짜를 확인해야 합니다.
+      1. 시스템 날짜 또는 사용자 확인을 통해 현재 날짜 파악
+      2. 데이터 검색 시 올바른 연도 사용 (예: 2026년이면 "2026년" 키워드 사용)
+      3. 실적 전망 시 현재 연도 기준으로 과거/미래 구분
+      4. 분석 리포트에 분석 기준일 명시
+
 # 분석 대상 설정
 targets:
   universe:
@@ -41,12 +52,15 @@ targets:
       - "관리종목"
 
   time_range:
+    # 주의: 아래 값은 기본값이며, 분석 시점의 현재 날짜를 기준으로 동적 조정 필요
+    # 예: 현재가 2026년이면 historical.end=2025, forecast.start=2026
     historical:
-      start: 2019
-      end: 2024
+      start: "current_year - 5"  # 동적 계산
+      end: "current_year - 1"    # 동적 계산
     forecast:
-      start: 2025
-      end: 2027
+      start: "current_year"      # 동적 계산
+      end: "current_year + 2"    # 동적 계산
+    note: "분석 시작 전 반드시 현재 날짜를 확인하고 위 값을 동적으로 설정할 것"
 
 # 에이전트 파이프라인 정의
 pipeline:

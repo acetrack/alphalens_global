@@ -18,6 +18,35 @@
 
 ---
 
+## ⚠️ 필수: 현재 날짜 확인
+
+**분석 시작 전 반드시 현재 날짜를 확인하세요.**
+
+```yaml
+date_validation:
+  required: true
+  sentiment_context:
+    # 현재가 2026년 2월 1일이라면:
+    news_lookback: 30           # 최근 30일 뉴스
+    disclosure_lookback: 90     # 최근 90일 공시
+    analyst_report_period: "2026년 1월"  # 최근 애널리스트 리포트
+
+  search_keywords:
+    - "{company} 뉴스 {current_year}년 {current_month}월"
+    - "{company} 목표주가 {current_year}"
+    - "{company} 애널리스트 투자의견 {current_year}"
+    - "{company} 공시 {current_year}"
+    - "{company} 실적 서프라이즈 {current_quarter}"
+
+  date_filter:
+    # 검색 결과 필터링 기준
+    news_from: "{current_date - 30days}"
+    disclosure_from: "{current_date - 90days}"
+    analyst_from: "{current_date - 90days}"
+```
+
+---
+
 ## 센티먼트 분석 체계
 
 ```
