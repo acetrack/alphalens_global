@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(EBEST_APP_KEY=\"PSKOFQ9K2bhCoFKnQrct1UgLKuhOz1VkEsW9\" EBEST_APP_SECRET=\"JmEvPvQhO5of0Olxh879nxYPbieMrUZh\" python3:*)"
+    ]
+  }
+}

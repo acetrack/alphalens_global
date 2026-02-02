@@ -4,6 +4,13 @@
 # HTTP 요청
 requests>=2.28.0
 
+# 웹 크롤링 (센티먼트 분석용)
+beautifulsoup4>=4.11.0
+lxml>=4.9.0
+
+# RSS 피드 파싱 (뉴스 수집용)
+feedparser>=6.0.0
+
 # 한국 주식 데이터
 pykrx>=1.0.0
 

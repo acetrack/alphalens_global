@@ -14,6 +14,9 @@ from .screening_agent import ScreeningAgent, ScreeningCriteria
 from .financial_agent import FinancialAgent, FinancialAnalysisConfig
 from .valuation_agent import ValuationAgent
 from .industry_agent import IndustryAgent
+from .technical_agent import TechnicalAgent
+from .risk_agent import RiskAgent
+from .sentiment_agent import SentimentAgent
 from ..api.dart_client import DartClient
 from ..api.krx_client import KrxClient
 from ..models.stock import Stock, DataFreshness
@@ -95,6 +98,12 @@ class MasterOrchestrator:
             dart_client=self.dart_client,
             krx_client=self.krx_client
         )
+        self.technical_agent = TechnicalAgent(krx_client=self.krx_client)
+        self.risk_agent = RiskAgent(krx_client=self.krx_client)
+        self.sentiment_agent = SentimentAgent(
+            krx_client=self.krx_client,
+            dart_client=self.dart_client
+        )
 
         # 분석 날짜
         self.analysis_date = datetime.now()
@@ -150,7 +159,61 @@ class MasterOrchestrator:
             except Exception as e:
                 self.logger.warning(f"업종 분석 실패: {e}")
 
-        # 6. 목표가 산정 (ValuationAgent 사용)
+        # 6. 기술적 분석 (TechnicalAgent 사용)
+        technical_result = None
+        if self.technical_agent:
+            try:
+                technical_result = self.technical_agent.analyze(stock_code)
+                self.logger.info(f"기술적 분석 완료: {technical_result.overall_signal} ({technical_result.total_score}점)")
+            except Exception as e:
+                self.logger.warning(f"기술적 분석 실패: {e}")
+
+        # 6.5. 리스크 분석 (RiskAgent 사용)
+        risk_result = None
+        if self.risk_agent:
+            try:
+                # 재무 데이터 전달
+                financial_data_for_risk = None
+                if financial_result and "grade" in financial_result:
+                    # financial_result를 risk_agent가 사용할 수 있는 형태로 변환
+                    financial_data_for_risk = {
+                        "total_assets": financial_result.get("total_assets", 0),
+                        "working_capital": financial_result.get("working_capital", 0),
+                        "retained_earnings": financial_result.get("retained_earnings", 0),
+                        "ebit": financial_result.get("ebit", 0),
+                        "ebitda": financial_result.get("ebitda", 0),
+                        "total_liabilities": financial_result.get("total_liabilities", 0),
+                        "total_debt": financial_result.get("total_debt", 0),
+                        "equity": financial_result.get("equity", 0),
+                        "cash": financial_result.get("cash", 0),
+                        "interest_expense": financial_result.get("interest_expense", 0),
+                        "revenue": financial_result.get("revenue", 0),
+                        "market_cap": price_data.get("market_cap", valuation_data.get("market_cap", 0))
+                    }
+
+                risk_result = self.risk_agent.analyze(
+                    stock_code,
+                    financial_data=financial_data_for_risk,
+                    technical_data=technical_result.__dict__ if technical_result else None
+                )
+                self.logger.info(f"리스크 분석 완료: {risk_result.risk_grade} ({risk_result.total_risk_score}점)")
+            except Exception as e:
+                self.logger.warning(f"리스크 분석 실패: {e}")
+
+        # 6.7. 센티먼트 분석 (SentimentAgent 사용)
+        sentiment_result = None
+        if self.sentiment_agent:
+            try:
+                sentiment_result = self.sentiment_agent.analyze(
+                    stock_code,
+                    current_price=price_data.get("close_price"),
+                    financial_data=financial_data_for_risk
+                )
+                self.logger.info(f"센티먼트 분석 완료: {sentiment_result.sentiment_grade} ({sentiment_result.total_score}점)")
+            except Exception as e:
+                self.logger.warning(f"센티먼트 분석 실패: {e}")
+
+        # 7. 목표가 산정 (ValuationAgent 사용)
         valuation_result = self.valuation_agent.calculate_target_price(
             stock_code,
             current_price=price_data.get("close_price"),
@@ -161,18 +224,18 @@ class MasterOrchestrator:
         )
         target_price = valuation_result.target_price
 
-        # 7. 에이전트 스코어 계산 (밸류에이션 스코어 포함)
+        # 8. 에이전트 스코어 계산 (밸류에이션 스코어 포함)
         agent_scores = self._calculate_agent_scores(
-            price_data, valuation_data, financial_result, valuation_result, industry_result
+            price_data, valuation_data, financial_result, valuation_result, industry_result, technical_result, risk_result, sentiment_result
         )
 
-        # 8. 종합 Conviction Score 계산
+        # 9. 종합 Conviction Score 계산
         conviction_score = self._calculate_conviction_score(agent_scores)
 
-        # 9. 투자 등급 결정
+        # 10. 투자 등급 결정
         rating = self._determine_rating(conviction_score)
 
-        # 10. 리스크 평가
+        # 11. 리스크 평가
         risk_assessment = self._assess_risk(price_data, valuation_data)
 
         # 결과 생성
@@ -282,7 +345,10 @@ class MasterOrchestrator:
         valuation_data: Dict[str, Any],
         financial_result: Dict[str, Any],
         valuation_result: Optional[Any] = None,
-        industry_result: Optional[Any] = None
+        industry_result: Optional[Any] = None,
+        technical_result: Optional[Any] = None,
+        risk_result: Optional[Any] = None,
+        sentiment_result: Optional[Any] = None
     ) -> List[AgentScore]:
         """각 에이전트별 스코어 계산"""
         scores = []
@@ -321,14 +387,34 @@ class MasterOrchestrator:
             rationale=val_rationale
         ))
 
-        # Technical Score (단순화 - 모멘텀 기반)
-        tech_score = self._calculate_technical_score(price_data)
-        scores.append(AgentScore(
-            agent_name="Technical Agent",
-            score=tech_score,
-            weight=self.config.weights["technical"],
-            rationale=f"등락률: {price_data.get('change_rate', 0):.2f}%"
-        ))
+        # Technical Score (TechnicalAgent 결과 사용)
+        if technical_result:
+            tech_score = technical_result.total_score
+            # 시그널 요약
+            signals_summary = []
+            if technical_result.ma_arrangement == "bullish_aligned":
+                signals_summary.append("정배열")
+            elif technical_result.ma_arrangement == "bearish_aligned":
+                signals_summary.append("역배열")
+            if technical_result.rsi_status == "oversold":
+                signals_summary.append("과매도")
+            elif technical_result.rsi_status == "overbought":
+                signals_summary.append("과매수")
+            tech_rationale = f"{technical_result.overall_signal} ({', '.join(signals_summary) if signals_summary else '중립'})"
+            scores.append(AgentScore(
+                agent_name="Technical Agent",
+                score=tech_score,
+                weight=self.config.weights["technical"],
+                rationale=tech_rationale
+            ))
+        else:
+            tech_score = self._calculate_technical_score(price_data)
+            scores.append(AgentScore(
+                agent_name="Technical Agent",
+                score=tech_score,
+                weight=self.config.weights["technical"],
+                rationale=f"등락률: {price_data.get('change_rate', 0):.2f}% (기본 분석)"
+            ))
 
         # Industry Score (IndustryAgent 결과 사용)
         if industry_result:
@@ -348,22 +434,45 @@ class MasterOrchestrator:
                 rationale="업종 분석 데이터 없음 - 기본값 적용"
             ))
 
-        # Risk Score
-        risk_score = self._calculate_risk_score(valuation_data)
-        scores.append(AgentScore(
-            agent_name="Risk Agent",
-            score=risk_score,
-            weight=self.config.weights["risk"],
-            rationale="위험 평가 기반"
-        ))
+        # Risk Score (RiskAgent 결과 사용)
+        if risk_result:
+            # 리스크 점수를 역전 (리스크가 낮을수록 높은 점수)
+            risk_score = 100 - risk_result.total_risk_score
+            risk_rationale = f"{risk_result.risk_grade} (Beta: {risk_result.beta_adjusted:.2f}, Z-Score: {risk_result.z_score:.1f})" if risk_result.beta_adjusted and risk_result.z_score else risk_result.risk_grade
+            scores.append(AgentScore(
+                agent_name="Risk Agent",
+                score=risk_score,
+                weight=self.config.weights["risk"],
+                rationale=risk_rationale
+            ))
+        else:
+            risk_score = self._calculate_risk_score(valuation_data)
+            scores.append(AgentScore(
+                agent_name="Risk Agent",
+                score=risk_score,
+                weight=self.config.weights["risk"],
+                rationale="위험 평가 기반 (기본 분석)"
+            ))
 
-        # Sentiment Score (기본값 - 추후 확장)
-        scores.append(AgentScore(
-            agent_name="Sentiment Agent",
-            score=55,
-            weight=self.config.weights["sentiment"],
-            rationale="심리 분석 - 기본값 적용"
-        ))
+        # Sentiment Score (SentimentAgent 결과 사용)
+        if sentiment_result:
+            sent_score = sentiment_result.total_score
+            # 주요 동인 요약
+            drivers_summary = ", ".join(sentiment_result.key_drivers[:2]) if sentiment_result.key_drivers else sentiment_result.sentiment_grade
+            sent_rationale = f"{sentiment_result.sentiment_grade} ({drivers_summary})"
+            scores.append(AgentScore(
+                agent_name="Sentiment Agent",
+                score=sent_score,
+                weight=self.config.weights["sentiment"],
+                rationale=sent_rationale
+            ))
+        else:
+            scores.append(AgentScore(
+                agent_name="Sentiment Agent",
+                score=55,
+                weight=self.config.weights["sentiment"],
+                rationale="심리 분석 데이터 없음 - 기본값 적용"
+            ))
 
         return scores
 

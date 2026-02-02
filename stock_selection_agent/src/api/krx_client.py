@@ -388,7 +388,7 @@ class KrxClient:
         end_date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        투자자별 매매동향 조회
+        투자자별 매매동향 조회 (일별 순매수 금액)
 
         Args:
             stock_code: 종목코드
@@ -396,7 +396,7 @@ class KrxClient:
             end_date: 종료일
 
         Returns:
-            투자자별 순매수량 목록
+            투자자별 순매수량 목록 (일별)
         """
         if not end_date:
             end_date = self._get_latest_trade_date()
@@ -405,18 +405,30 @@ class KrxClient:
             start_date = start_dt.strftime("%Y%m%d")
 
         try:
-            df = krx.get_market_trading_value_and_volume_by_date(
+            # get_market_trading_value_by_date: 일별 투자자별 순매수 금액
+            # Columns: 기관합계, 기타법인, 개인, 외국인합계, 전체
+            df = krx.get_market_trading_value_by_date(
                 start_date, end_date, stock_code
             )
 
+            if df.empty:
+                return []
+
             result = []
             for date_idx, row in df.iterrows():
+                # 기관합계 순매수
+                institution_net = int(row.get("기관합계", 0))
+                # 외국인합계 순매수
+                foreign_net = int(row.get("외국인합계", 0))
+                # 개인 순매수
+                individual_net = int(row.get("개인", 0))
+
                 result.append({
                     "stock_code": stock_code,
                     "trade_date": date_idx.strftime("%Y%m%d"),
-                    "institution_net_buy": int(row.get("기관합계", 0)),
-                    "foreign_net_buy": int(row.get("외국인합계", 0)),
-                    "individual_net_buy": int(row.get("개인", 0)),
+                    "institution_net_buy": institution_net,
+                    "foreign_net_buy": foreign_net,
+                    "individual_net_buy": individual_net,
                 })
 
             return result

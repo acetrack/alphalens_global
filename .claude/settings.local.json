@@ -6,7 +6,12 @@
       "Bash(python3:*)",
       "Bash(source ~/.zshrc)",
       "Bash(python run_analysis.py:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(pip3 list:*)",
+      "Bash(export EBEST_APP_KEY=\"PSKOFQ9K2bhCoFKnQrct1UgLKuhOz1VkEsW9\")",
+      "Bash(export EBEST_APP_SECRET=\"JmEvPvQhO5of0Olxh879nxYPbieMrUZh\")",
+      "Bash(EBEST_APP_KEY=\"PSKOFQ9K2bhCoFKnQrct1UgLKuhOz1VkEsW9\" EBEST_APP_SECRET=\"JmEvPvQhO5of0Olxh879nxYPbieMrUZh\" python3:*)"
     ]
   }
 }

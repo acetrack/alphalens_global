@@ -533,6 +533,153 @@ class DartClient:
         except (ValueError, AttributeError):
             return None
 
+    def get_quarterly_earnings(
+        self,
+        corp_code: str,
+        year: Optional[str] = None,
+        quarter: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        분기별 실적 데이터 조회 (최근 4분기)
+
+        Args:
+            corp_code: 고유번호
+            year: 조회 연도 (None이면 최근 연도)
+            quarter: 분기 (1~4, None이면 최근 분기부터)
+
+        Returns:
+            분기별 실적 리스트
+            [
+                {
+                    "period": "2025 Q3",
+                    "year": "2025",
+                    "quarter": 3,
+                    "revenue": 매출액,
+                    "operating_profit": 영업이익,
+                    "net_income": 당기순이익,
+                    "eps": 주당순이익,
+                    "freshness": "최신" / "1분기 전" 등
+                },
+                ...
+            ]
+        """
+        logger = logging.getLogger(__name__)
+
+        # 현재 날짜 기준 최근 분기 계산
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.month
+
+        # 최근 공시된 분기 추정 (약 45일 지연 고려)
+        # 예: 3월 말 실적은 5월 중순 공시
+        if current_month <= 5:
+            recent_quarter = 4  # 전년 4분기
+            recent_year = current_year - 1
+        elif current_month <= 8:
+            recent_quarter = 1  # 올해 1분기
+            recent_year = current_year
+        elif current_month <= 11:
+            recent_quarter = 2  # 올해 2분기
+            recent_year = current_year
+        else:
+            recent_quarter = 3  # 올해 3분기
+            recent_year = current_year
+
+        # 시작 분기 결정
+        target_year = year or recent_year
+        target_quarter = quarter or recent_quarter
+
+        # 보고서 코드 매핑
+        quarter_to_reprt_code = {
+            1: "11013",  # 1분기보고서
+            2: "11012",  # 반기보고서
+            3: "11014",  # 3분기보고서
+            4: "11011",  # 사업보고서 (연간)
+        }
+
+        earnings_data = []
+
+        # 최근 4분기 조회
+        for i in range(4):
+            q_year = target_year
+            q_quarter = target_quarter - i
+
+            # 연도 조정
+            while q_quarter < 1:
+                q_quarter += 4
+                q_year -= 1
+
+            reprt_code = quarter_to_reprt_code[q_quarter]
+
+            try:
+                # 재무제표 조회
+                fs_data = self.get_financial_statement(
+                    corp_code, str(q_year), reprt_code, "CFS"
+                )
+
+                if fs_data.get("status") != "000":
+                    # 연결재무제표 없으면 별도재무제표
+                    fs_data = self.get_financial_statement(
+                        corp_code, str(q_year), reprt_code, "OFS"
+                    )
+
+                if fs_data.get("status") != "000":
+                    logger.warning(f"{q_year} Q{q_quarter} 재무제표 없음")
+                    continue
+
+                # 재무 항목 파싱
+                items = fs_data.get("list", [])
+                quarter_data = {
+                    "period": f"{q_year} Q{q_quarter}",
+                    "year": str(q_year),
+                    "quarter": q_quarter,
+                    "reprt_code": reprt_code
+                }
+
+                for item in items:
+                    account_nm = item.get("account_nm", "")
+                    thstrm_amount = self._parse_amount(item.get("thstrm_amount"))
+
+                    # 계정과목별 매핑
+                    if "매출액" in account_nm or "수익(매출액)" in account_nm:
+                        quarter_data["revenue"] = thstrm_amount
+                    elif "영업이익" in account_nm and "영업이익(손실)" in account_nm:
+                        quarter_data["operating_profit"] = thstrm_amount
+                    elif "당기순이익" in account_nm or "당기순손익" in account_nm:
+                        if "지배기업" in account_nm or "당기순이익(손실)" == account_nm:
+                            quarter_data["net_income"] = thstrm_amount
+                    elif "주당순이익" in account_nm or "기본주당순이익" in account_nm:
+                        # EPS는 문자열로 올 수 있음 (단위: 원)
+                        eps_str = item.get("thstrm_amount", "")
+                        try:
+                            quarter_data["eps"] = int(float(eps_str.replace(",", "")))
+                        except (ValueError, AttributeError):
+                            pass
+
+                # EPS 계산 (직접 제공되지 않는 경우)
+                if "eps" not in quarter_data and quarter_data.get("net_income"):
+                    # 주당순이익 = 순이익 / 발행주식수
+                    # 발행주식수는 별도 조회 필요하므로 생략
+                    pass
+
+                # 데이터 신선도
+                age = (current_year - q_year) * 4 + (recent_quarter - q_quarter)
+                if age == 0:
+                    quarter_data["freshness"] = "최신"
+                elif age == 1:
+                    quarter_data["freshness"] = "1분기 전"
+                else:
+                    quarter_data["freshness"] = f"{age}분기 전"
+
+                earnings_data.append(quarter_data)
+
+            except Exception as e:
+                logger.error(f"{q_year} Q{q_quarter} 조회 실패: {e}")
+                continue
+
+        logger.info(f"분기별 실적 조회 완료: {len(earnings_data)}분기")
+        return earnings_data
+
 
 class DartApiError(Exception):
     """DART API 오류"""
