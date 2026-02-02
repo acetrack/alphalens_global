@@ -74,11 +74,27 @@ class FinancialAgent:
             api_key: DART API 키
             dart_client: DartClient 인스턴스
         """
-        self.dart = dart_client or DartClient(api_key=api_key) if api_key else None
+        # dart_client가 전달되면 그것을 사용, 아니면 api_key로 새로 생성
+        if dart_client:
+            self.dart = dart_client
+        elif api_key:
+            self.dart = DartClient(api_key=api_key)
+        else:
+            self.dart = None
         self.logger = logging.getLogger(__name__)
 
     def _get_corp_code(self, stock_code: str) -> Optional[str]:
-        """종목코드에서 DART 고유번호 조회"""
+        """종목코드에서 DART 고유번호 조회 (동적 매핑)"""
+        # 1. DART API의 동적 매핑 먼저 시도
+        if self.dart:
+            try:
+                corp_code = self.dart.get_corp_code_by_stock_code(stock_code)
+                if corp_code:
+                    return corp_code
+            except Exception as e:
+                self.logger.warning(f"동적 corp_code 조회 실패: {e}")
+
+        # 2. 정적 매핑으로 폴백
         return self.CORP_CODE_MAP.get(stock_code)
 
     def analyze(

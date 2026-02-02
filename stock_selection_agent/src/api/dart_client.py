@@ -13,6 +13,12 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime, date
 from dataclasses import dataclass
 import time
+import zipfile
+import io
+import xml.etree.ElementTree as ET
+import json
+from pathlib import Path
+import logging
 
 
 @dataclass
@@ -111,25 +117,147 @@ class DartClient:
         Returns:
             고유번호 (예: "00126380")
         """
-        # 전체 기업 목록에서 검색 필요
-        # 실제로는 corp_code.xml을 다운로드하여 로컬에서 검색하는 것이 효율적
-        corp_list = self.get_corp_list()
-        for corp in corp_list:
-            if corp.get("corp_name") == corp_name:
-                return corp.get("corp_code")
-        return None
+        self._ensure_corp_code_loaded()
+        return self._name_to_corp_code.get(corp_name)
+
+    def get_corp_code_by_stock_code(self, stock_code: str) -> Optional[str]:
+        """
+        종목코드로 고유번호(corp_code) 조회
+
+        Args:
+            stock_code: 종목코드 (예: "005930")
+
+        Returns:
+            고유번호 (예: "00126380")
+        """
+        self._ensure_corp_code_loaded()
+        return self._stock_to_corp_code.get(stock_code)
+
+    def get_stock_code_by_corp_code(self, corp_code: str) -> Optional[str]:
+        """
+        고유번호로 종목코드 조회
+
+        Args:
+            corp_code: 고유번호 (예: "00126380")
+
+        Returns:
+            종목코드 (예: "005930")
+        """
+        self._ensure_corp_code_loaded()
+        return self._corp_to_stock_code.get(corp_code)
+
+    def _ensure_corp_code_loaded(self):
+        """기업코드 매핑 데이터가 로드되었는지 확인하고, 없으면 로드"""
+        if hasattr(self, '_corp_code_loaded') and self._corp_code_loaded:
+            return
+
+        # 캐시 파일 경로
+        cache_dir = Path(__file__).parent.parent.parent / "data"
+        cache_file = cache_dir / "corp_code_mapping.json"
+
+        # 캐시 파일이 있고 7일 이내면 캐시 사용
+        if cache_file.exists():
+            cache_age_days = (datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)).days
+            if cache_age_days < 7:
+                self._load_corp_code_from_cache(cache_file)
+                return
+
+        # 새로 다운로드
+        self._download_and_parse_corp_code(cache_dir, cache_file)
+
+    def _load_corp_code_from_cache(self, cache_file: Path):
+        """캐시 파일에서 기업코드 매핑 로드"""
+        logger = logging.getLogger(__name__)
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            self._stock_to_corp_code = data.get("stock_to_corp", {})
+            self._corp_to_stock_code = data.get("corp_to_stock", {})
+            self._name_to_corp_code = data.get("name_to_corp", {})
+            self._corp_code_loaded = True
+            logger.info(f"기업코드 매핑 캐시 로드 완료: {len(self._stock_to_corp_code)}개 종목")
+        except Exception as e:
+            logger.warning(f"캐시 로드 실패, 새로 다운로드: {e}")
+            self._download_and_parse_corp_code(cache_file.parent, cache_file)
+
+    def _download_and_parse_corp_code(self, cache_dir: Path, cache_file: Path):
+        """DART에서 corpCode.xml 다운로드 및 파싱"""
+        logger = logging.getLogger(__name__)
+        logger.info("DART corpCode.xml 다운로드 중...")
+
+        url = f"{self.config.base_url}/corpCode.xml"
+        params = {"crtfc_key": self.api_key}
+
+        try:
+            response = self.session.get(url, params=params, timeout=60)
+            response.raise_for_status()
+
+            # ZIP 파일 압축 해제
+            with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
+                xml_content = zf.read("CORPCODE.xml")
+
+            # XML 파싱
+            root = ET.fromstring(xml_content)
+
+            self._stock_to_corp_code = {}
+            self._corp_to_stock_code = {}
+            self._name_to_corp_code = {}
+
+            for item in root.findall("list"):
+                corp_code = item.findtext("corp_code", "")
+                corp_name = item.findtext("corp_name", "")
+                stock_code = item.findtext("stock_code", "")
+
+                if corp_code:
+                    self._name_to_corp_code[corp_name] = corp_code
+
+                    if stock_code and stock_code.strip():  # 상장사만
+                        self._stock_to_corp_code[stock_code] = corp_code
+                        self._corp_to_stock_code[corp_code] = stock_code
+
+            self._corp_code_loaded = True
+            logger.info(f"기업코드 파싱 완료: 상장사 {len(self._stock_to_corp_code)}개, 전체 {len(self._name_to_corp_code)}개")
+
+            # 캐시 저장
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_data = {
+                "stock_to_corp": self._stock_to_corp_code,
+                "corp_to_stock": self._corp_to_stock_code,
+                "name_to_corp": self._name_to_corp_code,
+                "updated_at": datetime.now().isoformat()
+            }
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            logger.info(f"기업코드 캐시 저장: {cache_file}")
+
+        except Exception as e:
+            logger.error(f"corpCode.xml 다운로드/파싱 실패: {e}")
+            # 빈 매핑으로 초기화
+            self._stock_to_corp_code = {}
+            self._corp_to_stock_code = {}
+            self._name_to_corp_code = {}
+            self._corp_code_loaded = True
+            raise DartApiError(f"기업코드 목록 로드 실패: {e}")
 
     def get_corp_list(self) -> List[Dict[str, Any]]:
         """
-        전체 기업 고유번호 목록 조회 (ZIP 파일)
-        주의: 대용량 데이터이므로 캐싱 권장
+        전체 기업 고유번호 목록 조회
+
+        Returns:
+            기업 목록 [{corp_code, corp_name, stock_code}, ...]
         """
-        # corp_code.xml은 ZIP 파일로 제공되어 별도 처리 필요
-        # 여기서는 간단히 에러 발생시킴
-        raise NotImplementedError(
-            "전체 기업 목록은 corpCode.xml API를 통해 ZIP 파일로 제공됩니다. "
-            "별도의 다운로드 및 파싱이 필요합니다."
-        )
+        self._ensure_corp_code_loaded()
+
+        result = []
+        for name, corp_code in self._name_to_corp_code.items():
+            stock_code = self._corp_to_stock_code.get(corp_code, "")
+            result.append({
+                "corp_code": corp_code,
+                "corp_name": name,
+                "stock_code": stock_code
+            })
+        return result
 
     def get_company_info(self, corp_code: str) -> Dict[str, Any]:
         """

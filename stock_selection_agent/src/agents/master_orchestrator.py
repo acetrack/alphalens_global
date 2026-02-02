@@ -13,6 +13,7 @@ from pathlib import Path
 from .screening_agent import ScreeningAgent, ScreeningCriteria
 from .financial_agent import FinancialAgent, FinancialAnalysisConfig
 from .valuation_agent import ValuationAgent
+from .industry_agent import IndustryAgent
 from ..api.dart_client import DartClient
 from ..api.krx_client import KrxClient
 from ..models.stock import Stock, DataFreshness
@@ -90,6 +91,10 @@ class MasterOrchestrator:
             dart_client=self.dart_client
         ) if self.dart_client else None
         self.valuation_agent = ValuationAgent(krx_client=self.krx_client)
+        self.industry_agent = IndustryAgent(
+            dart_client=self.dart_client,
+            krx_client=self.krx_client
+        )
 
         # 분석 날짜
         self.analysis_date = datetime.now()
@@ -125,12 +130,27 @@ class MasterOrchestrator:
         # 4. 재무제표 분석 (DART API 사용 가능한 경우)
         financial_result = {}
         if self.financial_agent:
-            bsns_year = str(self.analysis_date.year - 1)  # 전년도 재무제표
-            financial_result = self.financial_agent.analyze_by_stock_code(
-                stock_code, bsns_year
-            )
+            # 최신 재무제표부터 시도 (year-1, year-2 순으로 폴백)
+            for year_offset in range(1, 3):
+                bsns_year = str(self.analysis_date.year - year_offset)
+                financial_result = self.financial_agent.analyze_by_stock_code(
+                    stock_code, bsns_year
+                )
+                if "grade" in financial_result:
+                    self.logger.info(f"재무제표 조회 성공: {bsns_year}년")
+                    break
+                self.logger.debug(f"재무제표 조회 실패: {bsns_year}년")
 
-        # 5. 목표가 산정 (ValuationAgent 사용)
+        # 5. 업종 분석 (IndustryAgent 사용)
+        industry_result = None
+        if self.industry_agent:
+            try:
+                industry_result = self.industry_agent.analyze(stock_code)
+                self.logger.info(f"업종 분석 완료: {industry_result.sector_name} ({industry_result.total_score}점)")
+            except Exception as e:
+                self.logger.warning(f"업종 분석 실패: {e}")
+
+        # 6. 목표가 산정 (ValuationAgent 사용)
         valuation_result = self.valuation_agent.calculate_target_price(
             stock_code,
             current_price=price_data.get("close_price"),
@@ -141,18 +161,18 @@ class MasterOrchestrator:
         )
         target_price = valuation_result.target_price
 
-        # 6. 에이전트 스코어 계산 (밸류에이션 스코어 포함)
+        # 7. 에이전트 스코어 계산 (밸류에이션 스코어 포함)
         agent_scores = self._calculate_agent_scores(
-            price_data, valuation_data, financial_result, valuation_result
+            price_data, valuation_data, financial_result, valuation_result, industry_result
         )
 
-        # 7. 종합 Conviction Score 계산
+        # 8. 종합 Conviction Score 계산
         conviction_score = self._calculate_conviction_score(agent_scores)
 
-        # 8. 투자 등급 결정
+        # 9. 투자 등급 결정
         rating = self._determine_rating(conviction_score)
 
-        # 9. 리스크 평가
+        # 10. 리스크 평가
         risk_assessment = self._assess_risk(price_data, valuation_data)
 
         # 결과 생성
@@ -261,7 +281,8 @@ class MasterOrchestrator:
         price_data: Dict[str, Any],
         valuation_data: Dict[str, Any],
         financial_result: Dict[str, Any],
-        valuation_result: Optional[Any] = None
+        valuation_result: Optional[Any] = None,
+        industry_result: Optional[Any] = None
     ) -> List[AgentScore]:
         """각 에이전트별 스코어 계산"""
         scores = []
@@ -309,13 +330,23 @@ class MasterOrchestrator:
             rationale=f"등락률: {price_data.get('change_rate', 0):.2f}%"
         ))
 
-        # Industry Score (기본값 - 추후 확장)
-        scores.append(AgentScore(
-            agent_name="Industry Agent",
-            score=60,
-            weight=self.config.weights["industry"],
-            rationale="업종 분석 - 기본값 적용"
-        ))
+        # Industry Score (IndustryAgent 결과 사용)
+        if industry_result:
+            ind_score = industry_result.total_score
+            ind_rationale = f"{industry_result.sector_name} (시장대비 PER: {industry_result.per_vs_sector:+.1f})" if industry_result.per_vs_sector else industry_result.sector_name
+            scores.append(AgentScore(
+                agent_name="Industry Agent",
+                score=ind_score,
+                weight=self.config.weights["industry"],
+                rationale=ind_rationale
+            ))
+        else:
+            scores.append(AgentScore(
+                agent_name="Industry Agent",
+                score=50,
+                weight=self.config.weights["industry"],
+                rationale="업종 분석 데이터 없음 - 기본값 적용"
+            ))
 
         # Risk Score
         risk_score = self._calculate_risk_score(valuation_data)
@@ -625,27 +656,67 @@ class MasterOrchestrator:
         content += f"**분석일자**: {self.analysis_date.strftime('%Y-%m-%d')}\n"
         content += f"**분석 종목 수**: {len(results)}개\n\n"
 
-        content += "## 📊 스크리닝 결과 요약\n\n"
-        content += "| 순위 | 종목명 | 종목코드 | 등급 | Conviction | 현재가 | 목표가 | 상승여력 |\n"
-        content += "|:---:|:------|:------:|:---:|:---:|------:|------:|:---:|\n"
+        def get_upside(result):
+            if result.target_price and result.current_price and result.current_price > 0:
+                return ((result.target_price - result.current_price) / result.current_price) * 100
+            return None
 
-        for i, result in enumerate(results, 1):
-            if result.target_price and result.current_price:
-                upside = ((result.target_price - result.current_price) / result.current_price) * 100
-                upside_str = f"+{upside:.1f}%" if upside > 0 else f"{upside:.1f}%"
-            else:
-                upside_str = "N/A"
+        def get_price_date_str(result):
+            if result.data_freshness and hasattr(result.data_freshness, 'price_data_date') and result.data_freshness.price_data_date:
+                pd = result.data_freshness.price_data_date
+                if len(pd) == 8:
+                    return f" ({pd[4:6]}/{pd[6:8]})"
+            return ""
 
-            content += (
-                f"| {i} | {result.stock_name} | {result.stock_code} | "
-                f"{result.rating} | {result.conviction_score} | "
-                f"{result.current_price:,}원 | {result.target_price:,}원 | {upside_str} |\n"
-            )
+        def add_conviction_table(ranked_results):
+            """Conviction Score 강조 테이블"""
+            table = "| 순위 | 종목명 | 종목코드 | **★Conviction★** | 등급 | 현재가 (기준일) | 목표가 | 상승여력 |\n"
+            table += "|:---:|:------|:------:|:---:|:---:|------:|------:|:---:|\n"
+            for i, result in enumerate(ranked_results, 1):
+                upside = get_upside(result)
+                upside_str = f"+{upside:.1f}%" if upside and upside > 0 else (f"{upside:.1f}%" if upside else "N/A")
+                price_date_str = get_price_date_str(result)
+                table += (
+                    f"| {i} | {result.stock_name} | {result.stock_code} | "
+                    f"**{result.conviction_score}** | {result.rating} | "
+                    f"{result.current_price:,}원{price_date_str} | {result.target_price:,}원 | {upside_str} |\n"
+                )
+            return table
+
+        def add_upside_table(ranked_results):
+            """상승여력 강조 테이블"""
+            table = "| 순위 | 종목명 | 종목코드 | **★상승여력★** | 현재가 (기준일) | 목표가 | 등급 | Conviction |\n"
+            table += "|:---:|:------|:------:|:---:|------:|------:|:---:|:---:|\n"
+            for i, result in enumerate(ranked_results, 1):
+                upside = get_upside(result)
+                upside_str = f"+{upside:.1f}%" if upside and upside > 0 else (f"{upside:.1f}%" if upside else "N/A")
+                price_date_str = get_price_date_str(result)
+                table += (
+                    f"| {i} | {result.stock_name} | {result.stock_code} | "
+                    f"**{upside_str}** | "
+                    f"{result.current_price:,}원{price_date_str} | {result.target_price:,}원 | {result.rating} | {result.conviction_score} |\n"
+                )
+            return table
+
+        # 상승여력 양수인 종목만 필터링
+        positive_upside_results = [r for r in results if get_upside(r) is not None and get_upside(r) > 0]
+
+        content += f"**분석 대상**: {len(results)}개 중 상승여력 양수 {len(positive_upside_results)}개 종목\n\n"
+
+        # [1] Conviction Score 기준 정렬 (상승여력 양수만)
+        content += "## 📊 [1] Conviction Score 기준 (멀티팩터)\n\n"
+        by_conviction = sorted(positive_upside_results, key=lambda x: x.conviction_score, reverse=True)
+        content += add_conviction_table(by_conviction)
+
+        # [2] 상승여력 기준 정렬 (상승여력 양수만)
+        content += "\n## 📈 [2] 상승여력 기준\n\n"
+        by_upside = sorted(positive_upside_results, key=lambda x: get_upside(x), reverse=True)
+        content += add_upside_table(by_upside)
 
         content += "\n---\n\n"
         content += "## 📋 개별 종목 분석\n\n"
 
-        for result in results:
+        for result in positive_upside_results:
             content += f"### {result.stock_name} ({result.stock_code})\n\n"
             content += f"{result.summary}\n\n"
 

@@ -146,10 +146,6 @@ class ScreeningAgent:
         """기본 필터 적용 (시가총액, 거래대금)"""
         filtered = []
 
-        # 디버깅: 처음 3개 종목의 데이터 출력
-        if stocks:
-            self.logger.info(f"샘플 데이터 (첫 3개): {stocks[:3]}")
-
         for stock in stocks:
             market_cap = stock.get("market_cap") or 0
             trading_value = stock.get("trading_value") or 0

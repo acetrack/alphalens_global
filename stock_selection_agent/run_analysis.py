@@ -109,17 +109,70 @@ def run_screening(orchestrator: MasterOrchestrator, top_n: int = 10, save: bool 
         print("\n❌ 스크리닝 결과가 없습니다.")
         return results
 
-    print(f"\n📊 스크리닝 결과: {len(results)}개 종목")
-    print("-" * 80)
-    print(f"{'순위':^4} | {'종목명':^12} | {'코드':^8} | {'등급':^10} | {'Conviction':^10} | {'목표가':^10}")
-    print("-" * 80)
+    def get_price_date_str(result):
+        if result.data_freshness and hasattr(result.data_freshness, 'price_data_date') and result.data_freshness.price_data_date:
+            pd = result.data_freshness.price_data_date
+            if len(pd) == 8:
+                return f"({pd[4:6]}/{pd[6:8]})"
+        return ""
 
-    for i, result in enumerate(results, 1):
-        print(
-            f"{i:^4} | {result.stock_name:^12} | {result.stock_code:^8} | "
-            f"{result.rating:^10} | {result.conviction_score:^10.1f} | "
-            f"{result.target_price:>10,}원"
-        )
+    def get_upside(result):
+        if result.target_price and result.current_price and result.current_price > 0:
+            return ((result.target_price - result.current_price) / result.current_price) * 100
+        return None
+
+    def print_conviction_table(ranked_results, title):
+        """Conviction Score 기준 테이블 (멀티팩터 점수 강조)"""
+        print(f"\n{title}")
+        print("-" * 130)
+        print(f"{'순위':^4} | {'종목명':^12} | {'코드':^8} | {'★Conviction★':^14} | {'등급':^10} | {'현재가(기준일)':^18} | {'목표가':^12} | {'상승여력':^10}")
+        print("-" * 130)
+
+        for i, result in enumerate(ranked_results, 1):
+            price_date_str = get_price_date_str(result)
+            upside = get_upside(result)
+            upside_str = f"+{upside:.1f}%" if upside and upside > 0 else (f"{upside:.1f}%" if upside else "N/A")
+            current_price_str = f"{result.current_price:,}원 {price_date_str}"
+            print(
+                f"{i:^4} | {result.stock_name:^12} | {result.stock_code:^8} | "
+                f"{result.conviction_score:^14.1f} | {result.rating:^10} | {current_price_str:^18} | "
+                f"{result.target_price:>10,}원 | {upside_str:^10}"
+            )
+
+    def print_upside_table(ranked_results, title):
+        """상승여력 기준 테이블 (상승여력 강조)"""
+        print(f"\n{title}")
+        print("-" * 130)
+        print(f"{'순위':^4} | {'종목명':^12} | {'코드':^8} | {'★상승여력★':^12} | {'현재가(기준일)':^18} | {'목표가':^12} | {'등급':^10} | {'Conviction':^10}")
+        print("-" * 130)
+
+        for i, result in enumerate(ranked_results, 1):
+            price_date_str = get_price_date_str(result)
+            upside = get_upside(result)
+            upside_str = f"+{upside:.1f}%" if upside and upside > 0 else (f"{upside:.1f}%" if upside else "N/A")
+            current_price_str = f"{result.current_price:,}원 {price_date_str}"
+            print(
+                f"{i:^4} | {result.stock_name:^12} | {result.stock_code:^8} | "
+                f"{upside_str:^12} | {current_price_str:^18} | "
+                f"{result.target_price:>10,}원 | {result.rating:^10} | {result.conviction_score:^10.1f}"
+            )
+
+    # 상승여력 양수인 종목만 필터링 (매수 매력 있는 종목)
+    positive_upside_results = [r for r in results if get_upside(r) is not None and get_upside(r) > 0]
+
+    if not positive_upside_results:
+        print("\n⚠️ 상승여력이 양수인 종목이 없습니다.")
+        return results
+
+    print(f"\n📌 분석 대상: {len(results)}개 중 상승여력 양수 {len(positive_upside_results)}개 종목")
+
+    # 1. Conviction Score 기준 정렬 (상승여력 양수만)
+    by_conviction = sorted(positive_upside_results, key=lambda x: x.conviction_score, reverse=True)
+    print_conviction_table(by_conviction, f"📊 [1] Conviction Score 기준 (멀티팩터) - {len(positive_upside_results)}개 종목")
+
+    # 2. 상승여력 기준 정렬 (상승여력 양수만)
+    by_upside = sorted(positive_upside_results, key=lambda x: get_upside(x), reverse=True)
+    print_upside_table(by_upside, f"\n📈 [2] 상승여력 기준 - {len(by_upside)}개 종목")
 
     if save:
         report_path = orchestrator.save_screening_report(results)
