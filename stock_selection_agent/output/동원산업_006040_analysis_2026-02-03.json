@@ -1,0 +1,68 @@
+{
+  "report_header": {
+    "analysis_date": "2026-02-03",
+    "stock_code": "006040",
+    "stock_name": "동원산업"
+  },
+  "investment_summary": {
+    "rating": "HOLD",
+    "target_price": 49000,
+    "current_price": 40300,
+    "upside_pct": 21.6,
+    "conviction_score": 53.8
+  },
+  "agent_scores": [
+    {
+      "agent": "Financial Agent",
+      "score": 70.0,
+      "weight": 0.25,
+      "weighted_score": 17.5,
+      "rationale": "재무등급: A"
+    },
+    {
+      "agent": "Valuation Agent",
+      "score": 40.0,
+      "weight": 0.2,
+      "weighted_score": 8.0,
+      "rationale": "적정 (목표가: 49,000원, 상승여력: +21.6%)"
+    },
+    {
+      "agent": "Technical Agent",
+      "score": 53.0,
+      "weight": 0.15,
+      "weighted_score": 7.949999999999999,
+      "rationale": "neutral (중립)"
+    },
+    {
+      "agent": "Industry Agent",
+      "score": 57.9,
+      "weight": 0.15,
+      "weighted_score": 8.684999999999999,
+      "rationale": "금융 (시장대비 PER: +2.1)"
+    },
+    {
+      "agent": "Risk Agent",
+      "score": 34.2,
+      "weight": 0.15,
+      "weighted_score": 5.13,
+      "rationale": "Moderate-High Risk"
+    },
+    {
+      "agent": "Sentiment Agent",
+      "score": 65.4,
+      "weight": 0.1,
+      "weighted_score": 6.540000000000001,
+      "rationale": "Bullish (목표주가 상승여력 632.4%)"
+    }
+  ],
+  "valuation": {
+    "per": 21.21,
+    "pbr": 0.57,
+    "target_price": 49000
+  },
+  "risk_assessment": {
+    "level": "LOW",
+    "factors": []
+  },
+  "summary": "동원산업(006040)에 대해 HOLD 의견을 제시합니다. Conviction Score 53.8/100으로 목표가 49,000원(상승여력 +21.6%)을 설정했습니다."
+}
