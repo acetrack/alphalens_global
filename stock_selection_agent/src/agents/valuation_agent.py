@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import logging
 
 from ..api.krx_client import KrxClient
+from ..api.dart_client import DartClient, SubsidiaryInfo
 
 
 @dataclass
@@ -202,12 +203,43 @@ class ValuationAgent:
     # 기본 예외 설정 (종목별)
     DEFAULT_OVERRIDES: Dict[str, StockOverride] = {}
 
+    # 지주회사 식별 키워드
+    HOLDING_COMPANY_KEYWORDS = [
+        "지주", "홀딩스", "Holdings", "홀딩", "그룹"
+    ]
+
+    # 사이클 산업 (정상화 이익 기준 필요)
+    CYCLICAL_SECTORS = [
+        "반도체", "메모리반도체", "철강", "화학", "해운", "조선", "건설"
+    ]
+
+    # 구조적 할인 기준
+    STRUCTURAL_DISCOUNT_RULES = {
+        "holding_company": {
+            "base_discount": 0.40,  # 기본 40% 할인
+            "min_discount": 0.25,
+            "max_discount": 0.55,
+        },
+        "liquidity": {
+            # 일평균 거래대금 기준 (원)
+            "tier1": {"threshold": 1_000_000_000, "discount": 0.175},   # 10억 미만
+            "tier2": {"threshold": 5_000_000_000, "discount": 0.075},   # 50억 미만
+            "tier3": {"threshold": 10_000_000_000, "discount": 0.04},   # 100억 미만
+        },
+        "small_cap": {
+            "threshold": 300_000_000_000,  # 시총 3000억 미만
+            "discount": 0.10,
+        }
+    }
+
     def __init__(
         self,
         krx_client: Optional[KrxClient] = None,
+        dart_client: Optional[DartClient] = None,
         config: Optional[ValuationConfig] = None
     ):
         self.krx = krx_client or KrxClient()
+        self.dart = dart_client  # NAV 계산용 (없으면 NAV 할인법 비활성화)
         self.config = config or ValuationConfig()
         self.logger = logging.getLogger(__name__)
 
@@ -219,6 +251,9 @@ class ValuationAgent:
 
         # 업종별 밸류에이션 캐시
         self._sector_valuation_cache: Dict[str, Dict[str, float]] = {}
+
+        # NAV 캐시 (지주회사용)
+        self._nav_cache: Dict[str, Dict[str, Any]] = {}
 
     def _init_default_overrides(self):
         """기본 예외 설정 초기화"""
@@ -380,6 +415,8 @@ class ValuationAgent:
         Returns:
             목표가 산정 결과
         """
+        self.logger.info(f"목표가 산정 시작: {stock_code}")
+
         # 1. 기본 데이터 조회
         if current_price is None or current_per is None:
             price_data = self.krx.get_stock_price(stock_code)
@@ -438,11 +475,36 @@ class ValuationAgent:
 
         else:
             # 표준 업종 평균
-            target_per = self.SECTOR_PER_BASELINE.get(sector, 12.0)
+            base_target_per = self.SECTOR_PER_BASELINE.get(sector, 12.0)
             target_pbr = self._get_sector_target_pbr(sector)
 
-            rationale.append(f"업종({sector}) 평균 PER: {target_per}배")
-            result.methodology = "상대가치 평가 (업종 평균)"
+            # 4.5 구조적 할인 분석 (핵심 추가)
+            structural_analysis = self._analyze_structural_discount(
+                stock_name=stock_name,
+                stock_code=stock_code,
+                current_per=current_per,
+                current_price=current_price,
+                sector=sector,
+                target_per=base_target_per
+            )
+
+            # 구조적 할인 적용
+            if structural_analysis["has_structural_discount"]:
+                target_per = structural_analysis["adjusted_target_per"]
+                caveats.extend(structural_analysis["caveats"])
+                rationale.append(
+                    f"업종({sector}) 평균 PER: {base_target_per}배 → "
+                    f"구조적 할인 적용 후: {target_per:.1f}배"
+                )
+                rationale.append(
+                    f"구조적 할인율: {structural_analysis['total_discount_pct']:.0f}% "
+                    f"({', '.join([f['factor'] for f in structural_analysis['discount_factors']])})"
+                )
+                result.methodology = "상대가치 평가 (구조적 할인 적용)"
+            else:
+                target_per = base_target_per
+                rationale.append(f"업종({sector}) 평균 PER: {target_per}배")
+                result.methodology = "상대가치 평가 (업종 평균)"
 
         # 5. PER 기반 목표가
         if eps and eps > 0:
@@ -511,6 +573,13 @@ class ValuationAgent:
 
         result.rationale = rationale
         result.caveats = caveats
+
+        # 로그 출력
+        self.logger.info(
+            f"목표가 산정 완료: {stock_code} - "
+            f"{result.target_price:,}원 (상승여력: {result.upside_pct:+.1f}%, "
+            f"밸류에이션: {result.valuation_status})"
+        )
 
         return result
 
@@ -588,6 +657,378 @@ class ValuationAgent:
     def _get_sector(self, stock_code: str) -> str:
         """종목의 업종 반환"""
         return self.STOCK_SECTOR_MAP.get(stock_code, "기타")
+
+    def _is_holding_company(self, stock_name: str) -> bool:
+        """지주회사 여부 확인"""
+        return any(kw in stock_name for kw in self.HOLDING_COMPANY_KEYWORDS)
+
+    def _is_cyclical_sector(self, sector: str) -> bool:
+        """사이클 산업 여부 확인"""
+        return sector in self.CYCLICAL_SECTORS
+
+    def _analyze_structural_discount(
+        self,
+        stock_name: str,
+        stock_code: str,
+        current_per: Optional[float],
+        current_price: int,
+        sector: str,
+        target_per: float
+    ) -> Dict[str, Any]:
+        """
+        구조적 할인 요인 분석
+
+        Returns:
+            할인 요인, 총 할인율, 조정된 목표 PER, 경고 메시지
+        """
+        discount_factors = []
+        total_discount = 0.0
+        caveats = []
+        adjusted_target_per = target_per
+
+        # 1. 지주회사 할인
+        if self._is_holding_company(stock_name):
+            holding_discount = self.STRUCTURAL_DISCOUNT_RULES["holding_company"]["base_discount"]
+            discount_factors.append({
+                "factor": "지주회사 할인",
+                "discount_pct": holding_discount * 100,
+                "note": "NAV 할인법 적용 권장"
+            })
+            total_discount += holding_discount
+            caveats.append(f"⚠️ 지주회사: 업종 평균 PER 직접 적용 부적합 (구조적 할인 {holding_discount*100:.0f}% 적용)")
+
+        # 2. 유동성 할인 (거래대금 기반) - 추후 실제 데이터 연동 필요
+        # 현재는 가격 수준으로 대략적 추정
+        if current_price and current_price < 20000:
+            # 저가주는 유동성 부족 가능성
+            liquidity_discount = 0.05
+            discount_factors.append({
+                "factor": "소형주/유동성 할인",
+                "discount_pct": liquidity_discount * 100,
+                "note": "저가주 유동성 리스크"
+            })
+            total_discount += liquidity_discount
+
+        # 3. 현재 PER이 업종 평균 대비 크게 낮은 경우 (시장이 할인하는 이유 존재)
+        if current_per and current_per > 0 and target_per > 0:
+            per_discount_ratio = current_per / target_per
+            if per_discount_ratio < 0.5:  # 업종 평균의 50% 미만
+                # 시장이 할인하는 구조적 이유가 있음
+                market_implied_discount = min(0.30, (1 - per_discount_ratio) * 0.5)
+                discount_factors.append({
+                    "factor": "시장 내재 할인",
+                    "discount_pct": market_implied_discount * 100,
+                    "note": f"현재 PER({current_per:.1f}배)이 업종 평균({target_per}배)의 {per_discount_ratio*100:.0f}% 수준"
+                })
+                total_discount += market_implied_discount
+                caveats.append(f"⚠️ 시장이 할인하는 구조적 이유 존재 (PER {current_per:.1f}배 vs 업종 {target_per}배)")
+
+        # 4. 사이클 산업 경고
+        if self._is_cyclical_sector(sector):
+            caveats.append(f"⚠️ 사이클 산업({sector}): 현재 EPS가 정상 수준인지 확인 필요")
+
+        # 총 할인율 제한 (최대 60%)
+        total_discount = min(0.60, total_discount)
+
+        # 조정된 목표 PER
+        if total_discount > 0:
+            # 목표 PER에 할인 적용
+            adjusted_target_per = target_per * (1 - total_discount * 0.5)  # 할인의 50%만 PER에 반영
+            adjusted_target_per = max(adjusted_target_per, current_per * 1.2 if current_per and current_per > 0 else 5)
+
+        return {
+            "discount_factors": discount_factors,
+            "total_discount_pct": total_discount * 100,
+            "original_target_per": target_per,
+            "adjusted_target_per": adjusted_target_per,
+            "caveats": caveats,
+            "has_structural_discount": total_discount > 0.15
+        }
+
+    # =========================================================================
+    # NAV 할인법 (지주회사 전용)
+    # =========================================================================
+
+    def calculate_nav_valuation(
+        self,
+        stock_code: str,
+        stock_name: Optional[str] = None,
+        current_price: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        NAV 할인법을 사용한 지주회사 밸류에이션
+
+        지주회사의 경우 자회사 가치 합산 후 할인율을 적용하여 적정가치 산정
+
+        Args:
+            stock_code: 종목코드
+            stock_name: 종목명 (없으면 조회)
+            current_price: 현재가 (없으면 조회)
+
+        Returns:
+            NAV 기반 밸류에이션 결과
+        """
+        self.logger.info(f"NAV 할인법 시작: {stock_code}")
+
+        # 1. 기본 정보 조회
+        if current_price is None or stock_name is None:
+            price_data = self.krx.get_stock_price(stock_code)
+            current_price = current_price or price_data.get("close_price", 0)
+            stock_name = stock_name or price_data.get("stock_name", stock_code)
+
+        # DART 클라이언트 필요
+        if self.dart is None:
+            self.logger.warning("DART 클라이언트 없음 - NAV 할인법 사용 불가")
+            return {
+                "error": "DART API 클라이언트가 설정되지 않았습니다.",
+                "fallback": "상대가치 평가로 대체"
+            }
+
+        # 2. 자회사 정보 조회
+        try:
+            nav_data = self.dart.get_holding_company_nav_data(stock_code)
+        except Exception as e:
+            self.logger.error(f"자회사 정보 조회 실패: {e}")
+            return {
+                "error": f"자회사 정보 조회 실패: {e}",
+                "fallback": "상대가치 평가로 대체"
+            }
+
+        if "error" in nav_data:
+            return nav_data
+
+        # 3. 상장 자회사 시가총액 기준 지분가치 계산
+        listed_value = 0
+        listed_details = []
+
+        listed_codes = [
+            sub["stock_code"]
+            for sub in nav_data.get("listed_subsidiaries", [])
+            if sub.get("stock_code")
+        ]
+
+        if listed_codes:
+            market_caps = self.krx.get_multiple_market_caps(listed_codes)
+
+            for sub in nav_data.get("listed_subsidiaries", []):
+                code = sub.get("stock_code")
+                if not code or code not in market_caps:
+                    continue
+
+                cap_info = market_caps[code]
+                if "error" in cap_info:
+                    continue
+
+                market_cap = cap_info.get("market_cap", 0)
+                ownership = sub.get("ownership_pct", 0) / 100  # 퍼센트 → 비율
+
+                equity_value = int(market_cap * ownership)
+                listed_value += equity_value
+
+                listed_details.append({
+                    "name": sub.get("name"),
+                    "stock_code": code,
+                    "market_cap": market_cap,
+                    "ownership_pct": sub.get("ownership_pct"),
+                    "equity_value": equity_value,
+                    "valuation_method": "시가총액 기준"
+                })
+
+        # 4. 비상장 자회사 장부가 기준 가치
+        unlisted_value = 0
+        unlisted_details = []
+
+        for sub in nav_data.get("unlisted_subsidiaries", []):
+            book_value = sub.get("book_value", 0) or 0
+            # 보수적으로 장부가 100% 인정 (PBR 1.0배)
+            estimated_value = book_value
+
+            unlisted_value += estimated_value
+            unlisted_details.append({
+                "name": sub.get("name"),
+                "book_value": book_value,
+                "estimated_value": estimated_value,
+                "valuation_method": "장부가 기준 (PBR 1.0배)"
+            })
+
+        # 5. 총 NAV
+        gross_nav = listed_value + unlisted_value
+
+        # 6. 지주회사 할인율 결정
+        discount_rate, discount_adjustments = self._determine_holding_discount(
+            stock_code=stock_code,
+            stock_name=stock_name
+        )
+
+        # 7. 순자산가치
+        net_nav = int(gross_nav * (1 - discount_rate))
+
+        # 8. 발행주식수 조회 및 주당 가치
+        cap_info = self.krx.get_stock_market_cap(stock_code)
+        shares_outstanding = cap_info.get("shares_outstanding", 1)
+
+        fair_price_per_share = int(net_nav / shares_outstanding) if shares_outstanding > 0 else 0
+        # 1000원 단위 반올림
+        fair_price_per_share = round(fair_price_per_share / 1000) * 1000
+
+        # 업사이드 계산
+        upside_pct = round(
+            (fair_price_per_share - current_price) / current_price * 100, 1
+        ) if current_price > 0 else 0
+
+        result = {
+            "stock_code": stock_code,
+            "stock_name": stock_name,
+            "current_price": current_price,
+            "methodology": "NAV 할인법",
+            "gross_nav": gross_nav,
+            "listed_subsidiary_value": listed_value,
+            "unlisted_subsidiary_value": unlisted_value,
+            "discount_rate": discount_rate,
+            "discount_rate_pct": round(discount_rate * 100, 1),
+            "discount_adjustments": discount_adjustments,
+            "net_nav": net_nav,
+            "shares_outstanding": shares_outstanding,
+            "fair_price_per_share": fair_price_per_share,
+            "upside_pct": upside_pct,
+            "listed_subsidiaries": listed_details,
+            "unlisted_subsidiaries": unlisted_details,
+            "caveats": [
+                "⚠️ 지주회사: NAV 할인법 적용",
+                f"📊 적용 할인율: {discount_rate*100:.0f}%",
+                "비상장 자회사는 장부가 기준 (보수적 추정)"
+            ],
+            "valuation_status": "저평가" if upside_pct > 30 else "적정" if upside_pct > -10 else "고평가",
+            "analysis_date": datetime.now().strftime("%Y-%m-%d")
+        }
+
+        # 캐시 저장
+        self._nav_cache[stock_code] = result
+
+        self.logger.info(
+            f"NAV 할인법 완료: {stock_code} - "
+            f"NAV {gross_nav/1e8:.0f}억원 → 순NAV {net_nav/1e8:.0f}억원 "
+            f"(할인율 {discount_rate*100:.0f}%) → 적정가 {fair_price_per_share:,}원"
+        )
+
+        return result
+
+    def _determine_holding_discount(
+        self,
+        stock_code: str,
+        stock_name: str
+    ) -> Tuple[float, List[str]]:
+        """
+        지주회사 할인율 결정
+
+        기본 할인율: 40%
+        조정 요인:
+        - 지배구조 우수: -5%p
+        - 고배당 정책 (3% 이상): -5%p
+        - 유동성 부족 (일평균 50억 미만): +5%p
+        - 복잡한 순환출자: +10%p
+
+        Returns:
+            (할인율, 조정 내역 리스트)
+        """
+        base_discount = self.STRUCTURAL_DISCOUNT_RULES["holding_company"]["base_discount"]
+        adjustments = [f"기본 할인율: {base_discount*100:.0f}%"]
+
+        # 1. 배당수익률 확인
+        try:
+            val_data = self.krx.get_stock_valuation(stock_code)
+            dividend_yield = val_data.get("dividend_yield", 0) / 100  # % → 비율
+
+            if dividend_yield >= 0.03:  # 3% 이상
+                base_discount -= 0.05
+                adjustments.append(f"고배당 ({dividend_yield*100:.1f}%): -5%p")
+        except Exception:
+            pass
+
+        # 2. 유동성 확인 (거래대금)
+        try:
+            price_data = self.krx.get_stock_price(stock_code)
+            trading_value = price_data.get("trading_value", 0)
+
+            if trading_value < 5_000_000_000:  # 일평균 50억 미만
+                base_discount += 0.05
+                adjustments.append("유동성 부족: +5%p")
+        except Exception:
+            pass
+
+        # 3. 범위 제한
+        min_discount = self.STRUCTURAL_DISCOUNT_RULES["holding_company"]["min_discount"]
+        max_discount = self.STRUCTURAL_DISCOUNT_RULES["holding_company"]["max_discount"]
+        final_discount = max(min_discount, min(max_discount, base_discount))
+
+        adjustments.append(f"최종 할인율: {final_discount*100:.0f}%")
+
+        return final_discount, adjustments
+
+    def get_holding_company_valuation(
+        self,
+        stock_code: str,
+        use_nav: bool = True
+    ) -> TargetPriceResult:
+        """
+        지주회사 밸류에이션 (NAV 할인법 우선)
+
+        Args:
+            stock_code: 종목코드
+            use_nav: NAV 할인법 사용 여부 (False면 상대가치 평가)
+
+        Returns:
+            목표가 산정 결과
+        """
+        # 기본 정보 조회
+        price_data = self.krx.get_stock_price(stock_code)
+        val_data = self.krx.get_stock_valuation(stock_code)
+
+        current_price = price_data.get("close_price", 0)
+        stock_name = price_data.get("stock_name", stock_code)
+
+        # 지주회사가 아니면 표준 방식
+        if not self._is_holding_company(stock_name):
+            return self.calculate_target_price(stock_code)
+
+        # NAV 할인법 시도
+        if use_nav and self.dart is not None:
+            nav_result = self.calculate_nav_valuation(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                current_price=current_price
+            )
+
+            if "error" in nav_result:
+                self.logger.warning(f"NAV 계산 실패: {nav_result.get('error')} - 상대가치 평가로 폴백")
+            else:
+                # NAV 결과를 TargetPriceResult로 변환
+                result = TargetPriceResult(
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    current_price=current_price,
+                    target_price=nav_result["fair_price_per_share"],
+                    target_price_low=int(nav_result["fair_price_per_share"] * 0.85 / 1000) * 1000,
+                    target_price_high=int(nav_result["fair_price_per_share"] * 1.15 / 1000) * 1000,
+                    upside_pct=nav_result["upside_pct"],
+                    valuation_status=nav_result["valuation_status"],
+                    valuation_score=80.0 if nav_result["upside_pct"] > 30 else 50.0,
+                    methodology="NAV 할인법",
+                    rationale=[
+                        f"상장 자회사 가치: {nav_result['listed_subsidiary_value']/1e8:.0f}억원",
+                        f"비상장 자회사 가치: {nav_result['unlisted_subsidiary_value']/1e8:.0f}억원",
+                        f"총 NAV: {nav_result['gross_nav']/1e8:.0f}억원",
+                        f"지주회사 할인율: {nav_result['discount_rate_pct']}%",
+                        f"순 NAV: {nav_result['net_nav']/1e8:.0f}억원",
+                        f"주당 적정가: {nav_result['fair_price_per_share']:,}원"
+                    ],
+                    caveats=nav_result.get("caveats", []),
+                    has_override=False
+                )
+                return result
+
+        # NAV 실패 시 상대가치 평가로 폴백
+        return self.calculate_target_price(stock_code)
 
     def get_valuation_summary(self, stock_code: str) -> Dict[str, Any]:
         """밸류에이션 요약 조회"""

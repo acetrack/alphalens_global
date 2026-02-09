@@ -31,6 +31,19 @@ class DartConfig:
     retry_delay: float = 1.0
 
 
+@dataclass
+class SubsidiaryInfo:
+    """자회사 정보"""
+    name: str                           # 자회사명
+    stock_code: Optional[str]           # 상장사인 경우 종목코드
+    is_listed: bool                     # 상장 여부
+    ownership_pct: float                # 지분율 (0.0 ~ 1.0)
+    book_value: Optional[int]           # 장부가 (원)
+    acquisition_cost: Optional[int]     # 취득원가 (원)
+    business_type: Optional[str]        # 업종
+    relationship: str                   # 관계 (종속기업, 관계기업 등)
+
+
 class DartClient:
     """
     DART 전자공시시스템 API 클라이언트
@@ -533,6 +546,28 @@ class DartClient:
         except (ValueError, AttributeError):
             return None
 
+    def _normalize_company_name(self, name: str) -> str:
+        """
+        회사명 정규화 (DART 법인명 → 표준 회사명)
+
+        예: "(주)현대백화점(*5)" → "현대백화점"
+        """
+        import re
+
+        if not name:
+            return ""
+
+        # 1. (주), 주식회사 제거
+        normalized = re.sub(r'\(주\)|\(유\)|주식회사|㈜', '', name)
+
+        # 2. (*N), (주N) 등 주석 제거
+        normalized = re.sub(r'\(\*?\d*\)', '', normalized)
+
+        # 3. 앞뒤 공백 제거
+        normalized = normalized.strip()
+
+        return normalized
+
     def get_quarterly_earnings(
         self,
         corp_code: str,
@@ -679,6 +714,299 @@ class DartClient:
 
         logger.info(f"분기별 실적 조회 완료: {len(earnings_data)}분기")
         return earnings_data
+
+    # =========================================================================
+    # 자회사/종속기업 정보 (NAV 할인법용)
+    # =========================================================================
+
+    def get_subsidiaries(
+        self,
+        corp_code: str,
+        bsns_year: Optional[str] = None
+    ) -> List[SubsidiaryInfo]:
+        """
+        종속기업/관계기업 투자 정보 조회
+
+        DART 사업보고서의 '종속회사의 현황' 및 '계열회사에 관한 사항'에서 추출
+
+        Args:
+            corp_code: 고유번호 (8자리)
+            bsns_year: 사업연도 (미입력시 최근 연도)
+
+        Returns:
+            자회사 정보 리스트
+        """
+        logger = logging.getLogger(__name__)
+
+        if not bsns_year:
+            bsns_year = str(datetime.now().year - 1)  # 전년도 사업보고서
+
+        logger.info(f"자회사 정보 조회: corp_code={corp_code}, year={bsns_year}")
+
+        subsidiaries = []
+
+        try:
+            # 1. 타법인 출자현황 조회 (otrCprInvstmntSttus) - 자회사 정보가 여기에 있음
+            sub_info = self._get_affiliate_status(corp_code, bsns_year)
+            subsidiaries.extend(sub_info)
+
+            # 2. 상장 자회사 종목코드 매핑
+            self._ensure_corp_code_loaded()
+            for sub in subsidiaries:
+                if sub.stock_code is None:
+                    # 회사명 정규화 (주), (*N), 공백 제거
+                    normalized_name = self._normalize_company_name(sub.name)
+
+                    # 정규화된 이름으로 종목코드 조회
+                    corp_code_sub = self._name_to_corp_code.get(normalized_name)
+
+                    # 못 찾으면 원래 이름으로 시도
+                    if not corp_code_sub:
+                        corp_code_sub = self._name_to_corp_code.get(sub.name)
+
+                    if corp_code_sub:
+                        stock_code = self._corp_to_stock_code.get(corp_code_sub)
+                        if stock_code:
+                            sub.stock_code = stock_code
+                            sub.is_listed = True
+                            logger.debug(f"  상장사 매칭: {sub.name} → {stock_code}")
+
+            logger.info(f"자회사 {len(subsidiaries)}개 조회 완료")
+            return subsidiaries
+
+        except Exception as e:
+            logger.error(f"자회사 정보 조회 실패: {e}")
+            return []
+
+    def _get_subsidiary_status(
+        self,
+        corp_code: str,
+        bsns_year: str
+    ) -> List[SubsidiaryInfo]:
+        """
+        사업보고서에서 종속회사 현황 조회
+
+        DART API 'hyslrSttus' (종속회사의 현황) 엔드포인트 사용
+        """
+        logger = logging.getLogger(__name__)
+        subsidiaries = []
+
+        try:
+            # 종속회사 현황 API 호출
+            result = self._request("hyslrSttus", {
+                "corp_code": corp_code,
+                "bsns_year": bsns_year,
+                "reprt_code": "11011"  # 사업보고서
+            })
+
+            if result.get("status") == "013":
+                # 데이터 없음 - 계열회사 현황으로 시도
+                return self._get_affiliate_status(corp_code, bsns_year)
+
+            items = result.get("list", [])
+            logger.debug(f"종속회사 현황 조회: {len(items)}개")
+
+            for item in items:
+                # 지분율 파싱
+                ownership_str = item.get("isu_stkcnt", "0") or "0"
+                total_str = item.get("tisu_stkcnt", "1") or "1"
+
+                try:
+                    ownership_pct = float(ownership_str.replace(",", "")) / float(total_str.replace(",", ""))
+                except (ValueError, ZeroDivisionError):
+                    ownership_pct = 0.0
+
+                # 또는 직접 지분율이 제공되는 경우
+                if "stacq_rt" in item and item["stacq_rt"]:
+                    try:
+                        ownership_pct = float(item["stacq_rt"].replace("%", "")) / 100
+                    except ValueError:
+                        pass
+
+                sub = SubsidiaryInfo(
+                    name=item.get("inv_prm", "").strip(),
+                    stock_code=None,  # 나중에 매핑
+                    is_listed=False,  # 나중에 확인
+                    ownership_pct=ownership_pct,
+                    book_value=self._parse_amount(item.get("trmend_blce")),
+                    acquisition_cost=self._parse_amount(item.get("frst_acqs_amount")),
+                    business_type=item.get("bsis_bfpfls_nm"),
+                    relationship="종속기업"
+                )
+                subsidiaries.append(sub)
+
+            return subsidiaries
+
+        except Exception as e:
+            logger.warning(f"종속회사 현황 조회 실패: {e}")
+            return self._get_affiliate_status(corp_code, bsns_year)
+
+    def _get_affiliate_status(
+        self,
+        corp_code: str,
+        bsns_year: str
+    ) -> List[SubsidiaryInfo]:
+        """
+        타법인 출자현황 조회 (종속회사 현황이 없는 경우 대체)
+
+        DART API 'otrCprInvstmntSttus' (타법인 출자현황) 엔드포인트 사용
+        응답 필드:
+        - inv_prm: 법인명
+        - trmend_blce_qota_rt: 기말 잔액 지분율
+        - trmend_blce_acntbk_amount: 기말 잔액 장부가액
+        - frst_acqs_amount: 최초 취득 금액
+        - invstmnt_purps: 출자 목적 (자회사 등)
+        """
+        logger = logging.getLogger(__name__)
+        subsidiaries = []
+
+        try:
+            # 타법인 출자현황 조회 (올바른 엔드포인트: otrCprInvstmntSttus)
+            result = self._request("otrCprInvstmntSttus", {
+                "corp_code": corp_code,
+                "bsns_year": bsns_year,
+                "reprt_code": "11011"
+            })
+
+            if result.get("status") != "000":
+                return []
+
+            items = result.get("list", [])
+            logger.info(f"타법인 출자현황 조회: {len(items)}개")
+
+            for item in items:
+                # 출자 목적으로 관계 구분
+                purpose = item.get("invstmnt_purps", "")
+                if "자회사" in purpose or "종속" in purpose:
+                    relationship = "종속기업"
+                elif "관계" in purpose:
+                    relationship = "관계기업"
+                elif "공동" in purpose:
+                    relationship = "공동기업"
+                else:
+                    relationship = "기타"
+
+                # 기말 잔액 지분율 파싱
+                # DART API는 항상 퍼센트 값 반환 (예: "42.39" = 42.39%, "0.3" = 0.3%)
+                ownership_pct = 0.0
+                ownership_str = item.get("trmend_blce_qota_rt", "") or ""
+                if ownership_str:
+                    try:
+                        # "42.39" 또는 "42.39%" 형식 → 항상 100으로 나눔
+                        ownership_pct = float(ownership_str.replace("%", "").replace(",", "").strip()) / 100
+                    except ValueError:
+                        pass
+
+                # 기말 잔액 장부가액
+                book_value = self._parse_amount(item.get("trmend_blce_acntbk_amount"))
+
+                # 최초 취득 금액
+                acquisition_cost = self._parse_amount(item.get("frst_acqs_amount"))
+
+                sub = SubsidiaryInfo(
+                    name=item.get("inv_prm", "").strip(),
+                    stock_code=None,
+                    is_listed=False,
+                    ownership_pct=ownership_pct,
+                    book_value=book_value,
+                    acquisition_cost=acquisition_cost,
+                    business_type=purpose,
+                    relationship=relationship
+                )
+
+                # 주요 자회사만 필터 (지분율 10% 이상)
+                if ownership_pct >= 0.10:
+                    subsidiaries.append(sub)
+                    logger.debug(f"  자회사: {sub.name}, 지분율: {ownership_pct*100:.1f}%, 장부가: {book_value}")
+
+            return subsidiaries
+
+        except Exception as e:
+            logger.warning(f"타법인 출자현황 조회 실패: {e}")
+            return []
+
+    def get_holding_company_nav_data(
+        self,
+        stock_code: str,
+        bsns_year: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        지주회사 NAV 계산을 위한 종합 데이터 조회
+
+        Args:
+            stock_code: 종목코드 (6자리)
+            bsns_year: 사업연도
+
+        Returns:
+            NAV 계산용 데이터 (자회사 목록, 상장/비상장 구분 등)
+        """
+        logger = logging.getLogger(__name__)
+
+        # 종목코드 -> 고유번호 변환
+        corp_code = self.get_corp_code_by_stock_code(stock_code)
+        if not corp_code:
+            return {"error": f"종목코드 {stock_code}의 고유번호를 찾을 수 없습니다."}
+
+        if not bsns_year:
+            # 전년도 사업보고서 시도, 없으면 전전년도로 폴백
+            # (사업보고서는 다음해 3-4월에 발표됨)
+            bsns_year = str(datetime.now().year - 1)
+
+        # 자회사 정보 조회
+        subsidiaries = self.get_subsidiaries(corp_code, bsns_year)
+
+        # 데이터가 없으면 전전년도로 폴백
+        if not subsidiaries and int(bsns_year) == datetime.now().year - 1:
+            logger.info(f"{bsns_year}년 데이터 없음 - {int(bsns_year) - 1}년으로 폴백")
+            bsns_year = str(int(bsns_year) - 1)
+            subsidiaries = self.get_subsidiaries(corp_code, bsns_year)
+
+        # 상장/비상장 분류
+        listed_subs = [s for s in subsidiaries if s.is_listed]
+        unlisted_subs = [s for s in subsidiaries if not s.is_listed]
+
+        # 결과 집계
+        total_book_value = sum(
+            s.book_value for s in subsidiaries
+            if s.book_value is not None
+        )
+
+        result = {
+            "stock_code": stock_code,
+            "corp_code": corp_code,
+            "bsns_year": bsns_year,
+            "total_subsidiaries": len(subsidiaries),
+            "listed_count": len(listed_subs),
+            "unlisted_count": len(unlisted_subs),
+            "total_book_value": total_book_value,
+            "listed_subsidiaries": [
+                {
+                    "name": s.name,
+                    "stock_code": s.stock_code,
+                    "ownership_pct": round(s.ownership_pct * 100, 2),
+                    "book_value": s.book_value,
+                    "relationship": s.relationship
+                }
+                for s in listed_subs
+            ],
+            "unlisted_subsidiaries": [
+                {
+                    "name": s.name,
+                    "ownership_pct": round(s.ownership_pct * 100, 2),
+                    "book_value": s.book_value,
+                    "business_type": s.business_type,
+                    "relationship": s.relationship
+                }
+                for s in unlisted_subs
+            ]
+        }
+
+        logger.info(
+            f"NAV 데이터 조회 완료: {stock_code} - "
+            f"상장 {len(listed_subs)}개, 비상장 {len(unlisted_subs)}개"
+        )
+
+        return result
 
 
 class DartApiError(Exception):

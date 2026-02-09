@@ -21,6 +21,7 @@ from ..api.dart_client import DartClient
 from ..api.krx_client import KrxClient
 from ..models.stock import Stock, DataFreshness
 from ..models.analysis import AnalysisResult, AgentScore, ValuationResult, RiskAssessment
+from ..utils.output_writer import DetailedOutputWriter
 
 
 @dataclass
@@ -93,7 +94,7 @@ class MasterOrchestrator:
         self.financial_agent = FinancialAgent(
             dart_client=self.dart_client
         ) if self.dart_client else None
-        self.valuation_agent = ValuationAgent(krx_client=self.krx_client)
+        self.valuation_agent = ValuationAgent(krx_client=self.krx_client, dart_client=self.dart_client)
         self.industry_agent = IndustryAgent(
             dart_client=self.dart_client,
             krx_client=self.krx_client
@@ -108,10 +109,14 @@ class MasterOrchestrator:
         # 분석 날짜
         self.analysis_date = datetime.now()
 
+        # 상세 출력 작성기
+        self.detailed_writer = DetailedOutputWriter(self.config.output_dir)
+
     def analyze_stock(
         self,
         stock_code: str,
-        include_screening: bool = False
+        include_screening: bool = False,
+        save_detailed: bool = True
     ) -> AnalysisResult:
         """
         개별 종목 분석 실행
@@ -119,6 +124,7 @@ class MasterOrchestrator:
         Args:
             stock_code: 종목코드 (6자리)
             include_screening: 스크리닝 결과 포함 여부
+            save_detailed: 에이전트별 상세 결과 파일 저장 여부
 
         Returns:
             통합 분석 결과
@@ -214,14 +220,23 @@ class MasterOrchestrator:
                 self.logger.warning(f"센티먼트 분석 실패: {e}")
 
         # 7. 목표가 산정 (ValuationAgent 사용)
-        valuation_result = self.valuation_agent.calculate_target_price(
-            stock_code,
-            current_price=price_data.get("close_price"),
-            current_per=valuation_data.get("per"),
-            current_pbr=valuation_data.get("pbr"),
-            eps=valuation_data.get("eps"),
-            bps=valuation_data.get("bps")
-        )
+        # 지주회사는 NAV 할인법 적용
+        stock_name = price_data.get("stock_name", stock_code)
+        if self.valuation_agent._is_holding_company(stock_name):
+            self.logger.info(f"지주회사 감지: {stock_name} - NAV 할인법 적용")
+            valuation_result = self.valuation_agent.get_holding_company_valuation(
+                stock_code,
+                use_nav=True
+            )
+        else:
+            valuation_result = self.valuation_agent.calculate_target_price(
+                stock_code,
+                current_price=price_data.get("close_price"),
+                current_per=valuation_data.get("per"),
+                current_pbr=valuation_data.get("pbr"),
+                eps=valuation_data.get("eps"),
+                bps=valuation_data.get("bps")
+            )
         target_price = valuation_result.target_price
 
         # 8. 에이전트 스코어 계산 (밸류에이션 스코어 포함)
@@ -258,8 +273,22 @@ class MasterOrchestrator:
             valuation_caveats=valuation_result.caveats if valuation_result else [],
             valuation_comment=valuation_result.analyst_comment if valuation_result else "",
             valuation_methodology=valuation_result.methodology if valuation_result else "",
-            global_peer_info=valuation_result.global_peer_info if valuation_result else None
+            global_peer_info=valuation_result.global_peer_info if valuation_result else None,
+            # 기술적 분석 결과
+            technical_result=technical_result
         )
+
+        # 12. 상세 분석 파일 저장
+        if save_detailed:
+            self._save_detailed_results(
+                stock_code=stock_code,
+                financial_result=financial_result,
+                industry_result=industry_result,
+                technical_result=technical_result,
+                risk_result=risk_result,
+                sentiment_result=sentiment_result,
+                valuation_result=valuation_result
+            )
 
         return result
 
@@ -300,6 +329,122 @@ class MasterOrchestrator:
         results.sort(key=lambda x: x.conviction_score, reverse=True)
 
         return results
+
+    def run_rsi_screening(
+        self,
+        criteria: Optional[ScreeningCriteria] = None,
+        top_n: int = 100,
+        rsi_threshold: float = 30.0
+    ) -> List[Dict[str, Any]]:
+        """
+        RSI 기반 경량 스크리닝 (과매도 종목 빠른 조회)
+
+        전체 분석을 실행하지 않고 RSI_14만 계산하여 과매도 종목을 빠르게 조회합니다.
+
+        Args:
+            criteria: 스크리닝 조건 (시총 등)
+            top_n: 분석할 종목 수
+            rsi_threshold: RSI 임계값 (이하인 종목만 반환)
+
+        Returns:
+            과매도 종목 리스트 (Dict: stock_code, stock_name, rsi_14, current_price, market_cap 등)
+        """
+        self.logger.info(f"RSI 스크리닝 시작 (RSI <= {rsi_threshold})")
+
+        # 1. 스크리닝 실행
+        screening_results = self.screening_agent.run_screening(market="ALL", criteria=criteria, top_n=top_n)
+
+        if not screening_results:
+            self.logger.warning("스크리닝 결과가 없습니다.")
+            return []
+
+        self.logger.info(f"스크리닝 대상: {len(screening_results)}개 종목")
+
+        # 2. 각 종목에 대해 RSI만 계산 (경량 분석)
+        results = []
+        for sr in screening_results:
+            stock_code = sr.stock.code if sr.stock else None
+            if not stock_code:
+                continue
+
+            try:
+                # 가격 히스토리 조회
+                price_history = self.krx_client.get_stock_price_history(stock_code)
+                if not price_history or len(price_history) < 20:
+                    continue
+
+                prices = [p["close_price"] for p in price_history]
+                current_price = prices[-1]
+
+                # RSI 계산
+                rsi = self._calculate_rsi_only(prices)
+                if rsi is None:
+                    continue
+
+                # 기본 정보 조합
+                stock_name = sr.stock.name if sr.stock else stock_code
+                market_cap = sr.price.market_cap if sr.price and sr.price.market_cap else 0
+
+                # 가격 데이터 날짜
+                price_date = price_history[-1].get("trade_date", "") if price_history else ""
+
+                result = {
+                    "stock_code": stock_code,
+                    "stock_name": stock_name,
+                    "rsi_14": round(rsi, 1),
+                    "rsi_status": "oversold" if rsi <= 30 else ("overbought" if rsi >= 70 else "neutral"),
+                    "current_price": current_price,
+                    "market_cap": market_cap,
+                    "price_date": price_date
+                }
+
+                # RSI 임계값 필터링
+                if rsi <= rsi_threshold:
+                    results.append(result)
+                    self.logger.debug(f"{stock_name}({stock_code}): RSI={rsi:.1f}")
+
+            except Exception as e:
+                self.logger.warning(f"RSI 계산 실패 ({stock_code}): {e}")
+                continue
+
+        # 3. RSI 낮은 순 정렬
+        results.sort(key=lambda x: x["rsi_14"])
+
+        self.logger.info(f"과매도 종목: {len(results)}개")
+        return results
+
+    def _calculate_rsi_only(self, prices: List[float], period: int = 14) -> Optional[float]:
+        """RSI만 빠르게 계산 (경량 버전)"""
+        if len(prices) < period + 1:
+            return None
+
+        gains = []
+        losses = []
+
+        for i in range(1, len(prices)):
+            change = prices[i] - prices[i-1]
+            if change > 0:
+                gains.append(change)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(change))
+
+        # 첫 평균
+        avg_gain = sum(gains[:period]) / period
+        avg_loss = sum(losses[:period]) / period
+
+        # EMA 스타일 계산
+        for i in range(period, len(gains)):
+            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+
+        if avg_loss == 0:
+            return 100.0
+
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
 
     def _validate_data_freshness(
         self,
@@ -842,6 +987,46 @@ class MasterOrchestrator:
 
         self.logger.info(f"스크리닝 보고서 저장: {file_path}")
         return str(file_path)
+
+    def _save_detailed_results(
+        self,
+        stock_code: str,
+        financial_result: Optional[Dict] = None,
+        industry_result: Optional[Any] = None,
+        technical_result: Optional[Any] = None,
+        risk_result: Optional[Any] = None,
+        sentiment_result: Optional[Any] = None,
+        valuation_result: Optional[Any] = None
+    ) -> Dict[str, Optional[str]]:
+        """
+        각 에이전트의 상세 분석 결과를 개별 파일로 저장
+
+        Args:
+            stock_code: 종목코드
+            financial_result: 재무 분석 결과
+            industry_result: 산업 분석 결과
+            technical_result: 기술적 분석 결과
+            risk_result: 리스크 분석 결과
+            sentiment_result: 센티먼트 분석 결과
+            valuation_result: 밸류에이션 결과
+
+        Returns:
+            에이전트별 저장된 파일 경로 딕셔너리
+        """
+        analysis_date = self.analysis_date.strftime("%Y-%m-%d")
+
+        saved_files = self.detailed_writer.save_all(
+            stock_code=stock_code,
+            financial_result=financial_result if financial_result and "grade" in financial_result else None,
+            industry_result=industry_result,
+            technical_result=technical_result,
+            risk_result=risk_result,
+            sentiment_result=sentiment_result,
+            valuation_result=valuation_result,
+            analysis_date=analysis_date
+        )
+
+        return saved_files
 
 
 def create_orchestrator_with_env() -> MasterOrchestrator:

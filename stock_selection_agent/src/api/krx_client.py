@@ -492,6 +492,113 @@ class KrxClient:
             return []
 
     # =========================================================================
+    # NAV 계산용 시가총액 조회
+    # =========================================================================
+
+    def get_stock_market_cap(
+        self,
+        stock_code: str,
+        trade_date: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        개별 종목 시가총액 조회 (NAV 계산용)
+
+        Args:
+            stock_code: 종목코드 (6자리)
+            trade_date: 조회일자 (기본: 최근 거래일)
+
+        Returns:
+            시가총액 정보 (원 단위)
+        """
+        if not trade_date:
+            trade_date = self._get_latest_trade_date()
+
+        try:
+            stock_name = self._get_stock_name(stock_code)
+
+            # 시가총액 조회
+            cap_df = krx.get_market_cap_by_date(trade_date, trade_date, stock_code)
+
+            if cap_df.empty:
+                # 전일 시도
+                prev_date = (datetime.strptime(trade_date, "%Y%m%d") - timedelta(days=1)).strftime("%Y%m%d")
+                cap_df = krx.get_market_cap_by_date(prev_date, prev_date, stock_code)
+                trade_date = prev_date
+
+            if cap_df.empty:
+                return {"error": f"종목코드 {stock_code}의 시가총액 정보를 찾을 수 없습니다."}
+
+            row = cap_df.iloc[-1]
+
+            return {
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "market_cap": int(row["시가총액"]),
+                "shares_outstanding": int(row["상장주식수"]),
+                "trade_date": trade_date,
+                "freshness": self._calculate_freshness(trade_date)
+            }
+
+        except Exception as e:
+            self.logger.error(f"종목 {stock_code} 시가총액 조회 실패: {e}")
+            return {"error": str(e)}
+
+    def get_multiple_market_caps(
+        self,
+        stock_codes: List[str],
+        trade_date: Optional[str] = None
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        여러 종목의 시가총액 일괄 조회 (NAV 계산용)
+
+        Args:
+            stock_codes: 종목코드 리스트
+            trade_date: 조회일자
+
+        Returns:
+            종목코드별 시가총액 정보 딕셔너리
+        """
+        if not trade_date:
+            trade_date = self._get_latest_trade_date()
+
+        result = {}
+
+        try:
+            # 전체 시장 시가총액 조회 (더 효율적)
+            kospi_cap = krx.get_market_cap_by_ticker(trade_date, market="KOSPI")
+            kosdaq_cap = krx.get_market_cap_by_ticker(trade_date, market="KOSDAQ")
+
+            for code in stock_codes:
+                if code in kospi_cap.index:
+                    row = kospi_cap.loc[code]
+                    result[code] = {
+                        "stock_code": code,
+                        "stock_name": self._get_stock_name(code),
+                        "market_cap": int(row["시가총액"]),
+                        "shares_outstanding": int(row["상장주식수"]),
+                        "market": "KOSPI",
+                        "trade_date": trade_date
+                    }
+                elif code in kosdaq_cap.index:
+                    row = kosdaq_cap.loc[code]
+                    result[code] = {
+                        "stock_code": code,
+                        "stock_name": self._get_stock_name(code),
+                        "market_cap": int(row["시가총액"]),
+                        "shares_outstanding": int(row["상장주식수"]),
+                        "market": "KOSDAQ",
+                        "trade_date": trade_date
+                    }
+                else:
+                    result[code] = {"error": f"종목코드 {code}를 찾을 수 없습니다."}
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"시가총액 일괄 조회 실패: {e}")
+            return {code: {"error": str(e)} for code in stock_codes}
+
+    # =========================================================================
     # 유틸리티
     # =========================================================================
 

@@ -72,6 +72,9 @@ class AnalysisResult:
     valuation_methodology: str = ""
     global_peer_info: Optional[Dict[str, Any]] = None
 
+    # 기술적 분석 결과 (RSI 등)
+    technical_result: Optional[Any] = None
+
     @property
     def upside_pct(self) -> Optional[float]:
         """상승여력 계산"""
